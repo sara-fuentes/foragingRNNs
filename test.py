@@ -1,6 +1,6 @@
 import sys
-
-
+sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
+sys.path.append('C:/Users/saraf')
 # packages to save data
 import os
 from pathlib import Path
@@ -16,8 +16,8 @@ from scipy.special import erf
 # packages to visualize data
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-# import sklearn.model_selection as sklms
-# import sklearn.discriminant_analysis as sklda
+import sklearn.model_selection as sklms
+import sklearn.discriminant_analysis as sklda
 
 # import gym and neurogym to create tasks
 import gym
@@ -36,18 +36,17 @@ envid = 'PerceptualDecisionMaking-v0'
 
 
 def get_modelpath(envid):
-    
     # Make a local file directories
     path = Path('.') / 'files'
     os.makedirs(path, exist_ok=True)
     path = path / envid
     os.makedirs(path, exist_ok=True)
-    
     return path
+
 
 def get_dataset(envid, env_kwargs, training_kwargs):
     """
-    Create neurogym dataset and environment. 
+    Create neurogym dataset and environment.
 
     args:
         envid (str): name of the task on the neurogym library
@@ -191,7 +190,7 @@ if __name__ == '__main__':
             perf.append(0)
 
 
-    data = {'ob': np.array(inputs).astype(np.float),
+    data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt}
     # Plot
     f, ax = plt.subplots(ncols=1, nrows=3, figsize=(8, 4), dpi=150, sharex=True)
@@ -333,7 +332,7 @@ if __name__ == '__main__':
             print('Shape of inputs: ' + str(inputs.shape))
         # INSTRUCTION 7: get the network's prediction for the current input
         action_pred, hidden = net(inputs)
-        action_pred = action_pred.numpy()
+        action_pred = action_pred.detach().numpy()
         
         # INSTRUCTION 8: get the network's choice. 
         # Take into account the shape of action_pred. Remember that the network makes a prediction for each time step in the trial.
@@ -347,7 +346,7 @@ if __name__ == '__main__':
         # Log trial info
         trial_info = env.trial
         trial_info.update({'correct': correct, 'choice': choice}) # write choices and outcome
-        info = info.append(trial_info, ignore_index=True)
+        info = info._append(trial_info, ignore_index=True)
         
         # Log activity
         activity.append(np.array(hidden)[:, 0, :])
