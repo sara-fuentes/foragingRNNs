@@ -1,17 +1,6 @@
-
-
-# %%
-# Uncomment following lines to install
-# ! pip install gym   # Install gym
-# ! git clone https://github.com/gyyang/neurogym.git  # Install neurogym
-# %cd neurogym/
-# ! pip install -e .
-
-# %%
 import sys
-sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
 
-# %%
+
 # packages to save data
 import os
 from pathlib import Path
@@ -20,12 +9,15 @@ import json
 # packages to handle data
 import numpy as np
 import pandas as pd
+from scipy.optimize import curve_fit
+from scipy.special import erf
 
 
 # packages to visualize data
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-
+# import sklearn.model_selection as sklms
+# import sklearn.discriminant_analysis as sklda
 
 # import gym and neurogym to create tasks
 import gym
@@ -77,7 +69,7 @@ def get_dataset(envid, env_kwargs, training_kwargs):
     return dataset, env
 
 
-# %%
+
 class Net(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(Net, self).__init__()
@@ -93,11 +85,6 @@ class Net(nn.Module):
         return x, out
 
 
-
- 
-
-
-# %%
 def plot_activity(activity, obs, config, trial):
 
     # Load and preprocess results
@@ -127,7 +114,7 @@ def plot_activity(activity, obs, config, trial):
 
     plt.tight_layout()
 
-# %%
+
 def analysis_activity_by_condition(activity, info, config, conditions=['choice']):
     """
     Plot single neuron activity by condition.
@@ -301,7 +288,7 @@ if __name__ == '__main__':
         config = json.load(f)
 
 
-    # %%
+    
     # Environment
     env = gym.make(envid, **config['env_kwargs'])
     try:
@@ -381,19 +368,16 @@ if __name__ == '__main__':
         ', Std: ' + str(np.std(activity)) + \
             ', Shape: ' + str(activity.shape))
 
-    # %%
+    
     # print the variables in the info dataframe
     print('Info dataframe:')
     print(info.head())
 
-    # %% [markdown]
     # Plot the psychometric curve. You can use the function you wrote in the first tutorial.
 
-    # %%
+    
     # plot the probability of choosing right as a function of the signed coherence and then fit a psychometric curve to the data.
     mpl.rcParams['font.family'] = ['DejaVu Serif']
-    from scipy.optimize import curve_fit
-    from scipy.special import erf
     def probit(x, beta, alpha):
         """
         Return probit function with parameters alpha and beta.
@@ -442,7 +426,7 @@ if __name__ == '__main__':
 
     plot_activity(activity=activity, obs=obs, config=config, trial=0)
 
-    # %%
+    
     silent_idx = np.where(activity.sum(axis=(0, 1))==0)[0]
 
     print('fraction of silent neurons:', len(silent_idx)/activity.shape[-1])
@@ -450,7 +434,7 @@ if __name__ == '__main__':
     clean_activity = activity[:,:,np.delete(np.arange(activity.shape[-1]), silent_idx)]
     plot_activity(activity=clean_activity, obs=obs, config=config, trial=0)
 
-    # %%
+    
     # min_max scaling
     minmax_activity = np.array([neuron-neuron.min() for neuron in clean_activity.transpose(2,0,1)]).transpose(1,2,0)
     minmax_activity = np.array([neuron/neuron.max() for neuron in minmax_activity.transpose(2,0,1)]).transpose(1,2,0)
@@ -459,11 +443,8 @@ if __name__ == '__main__':
 
     analysis_activity_by_condition(minmax_activity, info, config, conditions=['choice']) # other conditions: correct, ground_truth
 
-    # %%
-    import sklearn.model_selection as sklms
-    import sklearn.discriminant_analysis as sklda
-
-    # %%
+    
+   
     # number of CV splits
     n_splits = 100
 
@@ -489,12 +470,12 @@ if __name__ == '__main__':
 
             mean_acc[i,xi] = correct.mean()
 
-    # %%
+    
     # calculate 95% CI
     ci_acc = np.percentile(mean_acc, [5,95], axis=0)
 
 
-    # %%
+    
     # for plotting: time axis, stim and resp times
     t_plot = np.arange(activity.shape[1]) * config['dt']
     stim_onset = t_plot[np.where(obs[0,:,1]!=0)[0][0]]
@@ -512,7 +493,7 @@ if __name__ == '__main__':
     plt.xlim(t_plot[0],t_plot[-1])
 
 
-    # %%
+    
     mean_acc = np.zeros([len(np.unique(info.coh.values)), n_splits, minmax_activity.shape[1]])
 
     for ci,c in enumerate(np.unique(info.coh.values)):
@@ -539,7 +520,7 @@ if __name__ == '__main__':
 
                 mean_acc[ci,i,xi] = correct.mean()
 
-    # %%
+    
     # colors corresponding to different values of color gradient
     colors = plt.get_cmap('magma')(np.linspace(0.1,.9, len(np.unique(info.coh.values))))
 
