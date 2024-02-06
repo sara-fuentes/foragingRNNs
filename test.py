@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-import neurogym as ngym
+import ngym_foraging as ngym_f
 import gym
 import sklearn.discriminant_analysis as sklda
 import sklearn.model_selection as sklms
@@ -29,27 +29,27 @@ sys.path.append('C:/Users/saraf')
 # import torch and neural network modules to build RNNs
 
 # check if GPU is available
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-envid = 'PerceptualDecisionMaking-v0'
+TASK = 'PerceptualDecisionMaking-v0'
 
 
-def get_modelpath(envid):
+def get_modelpath(TASK):
     # Make a local file directories
     path = Path('.') / 'files'
     os.makedirs(path, exist_ok=True)
-    path = path / envid
+    path = path / TASK
     os.makedirs(path, exist_ok=True)
     return path
 
 
-def get_dataset(envid, env_kwargs, training_kwargs):
+def get_dataset(TASK, env_kwargs, training_kwargs):
     """
     Create neurogym dataset and environment.
 
     args:
-        envid (str): name of the task on the neurogym library
+        TASK (str): name of the task on the neurogym library
         env_kwargs (dict): task parameters
         training_kwargs (dict): training parameters
 
@@ -60,10 +60,10 @@ def get_dataset(envid, env_kwargs, training_kwargs):
     """
 
     # Make supervised dataset using neurogym's Dataset class
-    dataset = ngym.Dataset(envid,
-                           env_kwargs=env_kwargs,
-                           batch_size=training_kwargs['batch_size'],
-                           seq_len=training_kwargs['seq_len'])
+    dataset = ngym_f.Dataset(TASK,
+                             env_kwargs=env_kwargs,
+                             batch_size=training_kwargs['batch_size'],
+                             seq_len=training_kwargs['seq_len'])
     env = dataset.env
 
     return dataset, env
@@ -148,23 +148,13 @@ if __name__ == '__main__':
                        'n_epochs': 2000,
                        'batch_size': 16,
                        'seq_len': 100,
-                       'envid': envid}
+                       'TASK': TASK}
 
-    # Set up task parameters
-    if envid == 'PerceptualDecisionMaking-v0':
-        env_kwargs = {'dt': training_kwargs['dt'],
-                      'timing': {'fixation': 300,
-                                 'stimulus': 1000,
-                                 'delay': 0,
-                                 'decision': 300},
-                      'sigma': 2,
-                      'dim_ring': 2}
-    else:
-        env_kwargs = {'dt': training_kwargs['dt']}
+    env_kwargs = {'dt': training_kwargs['dt']}
 
     # call function to sample
     dataset, env = get_dataset(
-        envid=envid, env_kwargs=env_kwargs, training_kwargs=training_kwargs)
+        TASK=TASK, env_kwargs=env_kwargs, training_kwargs=training_kwargs)
 
     inputs, labels = dataset()
     print('inputs shape:', inputs.shape)
@@ -229,7 +219,7 @@ if __name__ == '__main__':
               output_size=env.action_space.n)
 
     # Move network to the device (CPU or GPU)
-    net = net.to(device)
+    net = net.to(DEVICE)
 
     criterion = nn.CrossEntropyLoss()
 
@@ -240,10 +230,10 @@ if __name__ == '__main__':
     training_kwargs['net_kwargs'] = net_kwargs
 
     # Save config
-    with open(get_modelpath(envid) / 'config.json', 'w') as f:
+    with open(get_modelpath(TASK) / 'config.json', 'w') as f:
         json.dump(training_kwargs, f)
 
-    print('Training task ', envid)
+    print('Training task ', TASK)
 
     num_epochs = training_kwargs['n_epochs']
 
@@ -253,8 +243,8 @@ if __name__ == '__main__':
 
         # get inputs and labels and pass them to the GPU
         inputs, labels = dataset()
-        inputs = torch.from_numpy(inputs).type(torch.float).to(device)
-        labels = torch.from_numpy(labels.flatten()).type(torch.long).to(device)
+        inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
+        labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
         # print shapes of inputs and labels
         if i == 0:
             print('inputs shape: ', inputs.shape)
@@ -288,17 +278,17 @@ if __name__ == '__main__':
             running_loss = 0.0
 
             # save current state of network's parameters
-            torch.save(net.state_dict(), get_modelpath(envid) / 'net.pth')
+            torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
 
     print('Finished Training')
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
-    with open(get_modelpath(envid) / 'config.json') as f:
+    with open(get_modelpath(TASK) / 'config.json') as f:
         config = json.load(f)
 
     # Environment
-    env = gym.make(envid, **config['env_kwargs'])
+    env = gym.make(TASK, **config['env_kwargs'])
     try:
         env.timing = config['env_kwargs']['timing']
     except KeyError:
@@ -317,10 +307,10 @@ if __name__ == '__main__':
                   hidden_size=config['net_kwargs']['hidden_size'],
                   output_size=config['net_kwargs']['action_size'])
 
-        net = net.to(device)  # pass to GPU for running forwards steps
+        net = net.to(DEVICE)  # pass to GPU for running forwards steps
 
         # load the trained network's weights from the saved file
-        net.load_state_dict(torch.load(get_modelpath(envid) / 'net.pth'))
+        net.load_state_dict(torch.load(get_modelpath(TASK) / 'net.pth'))
 
         # how many trials to run
         num_trial = 1000
