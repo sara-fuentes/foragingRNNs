@@ -32,7 +32,7 @@ sys.path.append('C:/Users/saraf')
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-TASK = 'PerceptualDecisionMaking-v0'
+TASK = 'Foraging-v0'
 
 
 def get_modelpath(TASK):
@@ -138,6 +138,29 @@ def analysis_activity_by_condition(activity, info, config, conditions=['choice']
             ax[1].set_xticklabels(t_plot[::10])
 
         # plt.legend(title=condition, loc='center left', bbox_to_anchor=(1.0, 0.5))
+
+
+def probit(x, beta, alpha):
+    """
+    Return probit function with parameters alpha and beta.
+
+    Parameters
+    ----------
+    x : float
+        independent variable.
+    beta : float
+        sensitiviy.
+    alpha : TYPE
+        bias term.
+
+    Returns
+    -------
+    probit : float
+        probit value for the given x, beta and alpha.
+
+    """
+    probit = 1/2*(1+erf((beta*x+alpha)/np.sqrt(2)))
+    return probit
 
 
 # --- MAIN
@@ -383,28 +406,6 @@ if __name__ == '__main__':
     # plot the probability of choosing right as a function of the signed coherence
     # and then fit a psychometric curve to the data.
     mpl.rcParams['font.family'] = ['DejaVu Serif']
-
-    def probit(x, beta, alpha):
-        """
-        Return probit function with parameters alpha and beta.
-
-        Parameters
-        ----------
-        x : float
-            independent variable.
-        beta : float
-            sensitiviy.
-        alpha : TYPE
-            bias term.
-
-        Returns
-        -------
-        probit : float
-            probit value for the given x, beta and alpha.
-
-        """
-        probit = 1/2*(1+erf((beta*x+alpha)/np.sqrt(2)))
-        return probit
 
     f, ax = plt.subplots(1, 1, figsize=(3, 3), dpi=150)
     choice = info['choice'].values
