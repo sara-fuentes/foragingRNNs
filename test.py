@@ -212,7 +212,7 @@ if __name__ == '__main__':
     # Plot
     f, ax = plt.subplots(ncols=1, nrows=3, figsize=(8, 4),
                          dpi=150, sharex=True)
-
+    # TODO: fix plot, t.i.a. that there is only one input (observation)
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
                data['ob'][:, 0], label='Fixation')
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
