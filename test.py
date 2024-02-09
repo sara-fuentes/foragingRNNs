@@ -180,7 +180,7 @@ if __name__ == '__main__':
                        'seq_len': 100,
                        'TASK': TASK}
 
-    env_kwargs = {'dt': training_kwargs['dt']}
+    env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8])}
 
     # call function to sample
     dataset, env = get_dataset(
@@ -201,6 +201,7 @@ if __name__ == '__main__':
     actions = []
     gt = []
     perf = []
+    rew_mat = []
     trial_count = 0
     for stp in range(int(num_steps)):
         action = env.action_space.sample()
@@ -209,6 +210,7 @@ if __name__ == '__main__':
         inputs.append(ob)
         actions.append(action)
         gt.append(info['gt'])
+        rew_mat.append(rew)
         if info['new_trial']:
             perf.append(info['performance'])
         else:
@@ -217,11 +219,11 @@ if __name__ == '__main__':
     data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt}
     # Plot
-    f, ax = plt.subplots(ncols=1, nrows=3, figsize=(8, 4),
+    f, ax = plt.subplots(ncols=1, nrows=4, figsize=(8, 4),
                          dpi=150, sharex=True)
 
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['ob'], label='Fixation')
+               data['ob'], '-+', label='Fixation')
     ax[0].set_ylabel('Inputs')
     ax[0].legend()
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
@@ -232,15 +234,17 @@ if __name__ == '__main__':
     ax[1].legend()
     ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], perf, label='perf')
     ax[2].set_ylabel('Performance')
-    ax[2].set_xlabel('Time (ms)')
+    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], rew_mat, label='perf')
+    ax[3].set_ylabel('Reward')
+    ax[3].set_xlabel('Time (ms)')
 
     num_neurons = 64
 
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
-                  'input_size': env.observation_space.n}  # instead of env.observation_space.shape
+                  'input_size': env.observation_space.shape}  # instead of env.observation_space.shape
 
-    net = Net(input_size=env.observation_space.n,
+    net = Net(input_size=env.observation_space.shape,
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n)
 
@@ -266,9 +270,9 @@ if __name__ == '__main__':
     running_loss = 0.0
 
     for i in range(num_epochs):
-
         # get inputs and labels and pass them to the GPU
         inputs, labels = dataset()
+        inputs = np.expand_dims(inputs, axis=2)
         inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
         labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
         # print shapes of inputs and labels
