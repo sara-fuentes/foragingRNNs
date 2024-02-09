@@ -210,7 +210,10 @@ if __name__ == '__main__':
         inputs.append(ob)
         actions.append(action)
         gt.append(info['gt'])
-        rew_mat.append(rew)
+        if isinstance(rew, np.ndarray):
+            rew_mat.append(rew[0])
+        else:
+            rew_mat.append(rew)
         if info['new_trial']:
             perf.append(info['performance'])
         else:
@@ -242,9 +245,9 @@ if __name__ == '__main__':
 
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
-                  'input_size': env.observation_space.shape}  # instead of env.observation_space.shape
+                  'input_size': env.observation_space.n}  # instead of env.observation_space.shape
 
-    net = Net(input_size=env.observation_space.shape,
+    net = Net(input_size=env.observation_space.n,
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n)
 
@@ -260,8 +263,8 @@ if __name__ == '__main__':
     training_kwargs['net_kwargs'] = net_kwargs
 
     # Save config
-    with open(get_modelpath(TASK) / 'config.json', 'w') as f:
-        json.dump(training_kwargs, f)
+    # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
+    #     json.dump(training_kwargs, f)
 
     print('Training task ', TASK)
 
@@ -314,13 +317,13 @@ if __name__ == '__main__':
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
-    with open(get_modelpath(TASK) / 'config.json') as f:
-        config = json.load(f)
+    # with open(get_modelpath(TASK) / 'config.json') as f:
+    #     config = json.load(f)
 
     # Environment
-    env = gym.make(TASK, **config['env_kwargs'])
+    env = gym.make(TASK, **training_kwargs['env_kwargs'])
     try:
-        env.timing = config['env_kwargs']['timing']
+        env.timing = training_kwargs['env_kwargs']['timing']
     except KeyError:
         timing = {}
         for period in env.timing.keys():
@@ -333,9 +336,9 @@ if __name__ == '__main__':
     # computation. The most commun way to do this is to use the context manager
     # torch.no_grad() as follows:
     with torch.no_grad():
-        net = Net(input_size=config['net_kwargs']['input_size'],
-                  hidden_size=config['net_kwargs']['hidden_size'],
-                  output_size=config['net_kwargs']['action_size'])
+        net = Net(input_size=training_kwargs['net_kwargs']['input_size'],
+                  hidden_size=training_kwargs['net_kwargs']['hidden_size'],
+                  output_size=training_kwargs['net_kwargs']['action_size'])
 
         net = net.to(DEVICE)  # pass to GPU for running forwards steps
 
@@ -356,7 +359,7 @@ if __name__ == '__main__':
         env.new_trial()
 
         # read out the inputs in that trial
-        inputs = torch.from_numpy(env.ob[:, np.newaxis, :]).type(torch.float)
+        inputs = torch.from_numpy(env.ob[:, np.newaxis]).type(torch.float)
         # as before you can print the shapes of the variables to understand what
         # they are and how to use them
         # do this for the rest of the variables as you build the code
@@ -371,7 +374,7 @@ if __name__ == '__main__':
         # makes a prediction for each time step in the trial.
         # Which is the prediction we really care about when evaluating the
         # network's performance?
-        choice = np.argmax(action_pred[-1, 0, :])
+        choice = np.argmax(action_pred[-1, 0])
 
         # INSTRUCTION 9: check if the choice is correct
         # Again, which is the target we want when evaluating the network's
@@ -385,7 +388,7 @@ if __name__ == '__main__':
         info = info._append(trial_info, ignore_index=True)
 
         # Log activity
-        activity.append(np.array(hidden)[:, 0, :])
+        activity.append(np.array(hidden)[:, 0])
 
         # Log the inputs (or observations) received by the network
         obs.append(env.ob)
@@ -440,7 +443,7 @@ if __name__ == '__main__':
     ax.plot(x, probit(x, *pars), color='k')
     plt.show()
 
-    plot_activity(activity=activity, obs=obs, config=config, trial=0)
+    plot_activity(activity=activity, obs=obs, config=training_kwargs, trial=0)
 
     silent_idx = np.where(activity.sum(axis=(0, 1)) == 0)[0]
 
@@ -449,7 +452,7 @@ if __name__ == '__main__':
     # silent neurons
     clean_activity = activity[:, :, np.delete(
         np.arange(activity.shape[-1]), silent_idx)]
-    plot_activity(activity=clean_activity, obs=obs, config=config, trial=0)
+    plot_activity(activity=clean_activity, obs=obs, config=training_kwargs, trial=0)
 
     # min_max scaling
     minmax_activity = np.array(
@@ -457,9 +460,9 @@ if __name__ == '__main__':
     minmax_activity = np.array(
         [neuron/neuron.max() for neuron in minmax_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
 
-    plot_activity(activity=minmax_activity, obs=obs, config=config, trial=0)
+    plot_activity(activity=minmax_activity, obs=obs, config=training_kwargs, trial=0)
 
-    analysis_activity_by_condition(minmax_activity, info, config, conditions=[
+    analysis_activity_by_condition(minmax_activity, info, training_kwargs, conditions=[
                                    'choice'])  # other conds: correct, ground_truth
 
     # number of CV splits
@@ -494,7 +497,7 @@ if __name__ == '__main__':
     ci_acc = np.percentile(mean_acc, [5, 95], axis=0)
 
     # for plotting: time axis, stim and resp times
-    t_plot = np.arange(activity.shape[1]) * config['dt']
+    t_plot = np.arange(activity.shape[1]) * training_kwargs['dt']
     stim_onset = t_plot[np.where(obs[0, :, 1] != 0)[0][0]]
     resp_onset = t_plot[np.where(obs[0, :, 0] != 1)[0][0]]
 
@@ -548,7 +551,8 @@ if __name__ == '__main__':
     # plot mean acc for each coherence level
     for ci in range(len(np.unique(info.coh.values))):
         plt.plot(t_plot, np.mean(
-            mean_acc[ci], axis=0), color=colors[ci], label=np.unique(info.coh.values)[ci])
+            mean_acc[ci], axis=0), color=colors[ci],
+            label=np.unique(info.coh.values)[ci])
 
     plt.plot(t_plot, np.zeros(mean_acc[ci].shape[1])+.5, 'k--', alpha=.2)
     plt.plot(stim_onset, .48, '^', color='k', ms=10)
