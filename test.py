@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Feb  8 22:20:23 2024
+
+@author: saraf
+"""
+
 import torch.nn as nn
 import torch
 import ngym_foraging as ngym_f
@@ -212,13 +219,9 @@ if __name__ == '__main__':
     # Plot
     f, ax = plt.subplots(ncols=1, nrows=3, figsize=(8, 4),
                          dpi=150, sharex=True)
-    # TODO: fix plot, t.i.a. that there is only one input (observation)
+
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['ob'][:, 0], label='Fixation')
-    ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['ob'][:, 1], label='Stim. L.')
-    ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['ob'][:, 2], label='Stim. R.')
+               data['ob'], label='Fixation')
     ax[0].set_ylabel('Inputs')
     ax[0].legend()
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
@@ -235,9 +238,9 @@ if __name__ == '__main__':
 
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
-                  'input_size': env.observation_space.shape[0]}  # input size
+                  'input_size': env.observation_space.n}  # instead of env.observation_space.shape
 
-    net = Net(input_size=env.observation_space.shape[0],
+    net = Net(input_size=env.observation_space.n,
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n)
 
