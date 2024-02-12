@@ -80,8 +80,9 @@ class Net(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(Net, self).__init__()
 
-        # INSTRUCTION 1: build a recurrent neural network with a single recurrent
-        # layer and rectified linear units
+        # INSTRUCTION 1: build a recurrent neural network with a single
+        # recurrent layer and rectified linear units
+
         self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu')
         self.linear = nn.Linear(hidden_size, output_size)
 
@@ -100,8 +101,8 @@ def plot_activity(activity, obs, config, trial):
     # time in ms
     t_plot = np.arange(activity.shape[1]) * config['dt']
 
-    # plot the observations for one trial. Note that we will visualize the inputs
-    # as a matrix instead of traces, as we have done before.
+    # plot the observations for one trial. Note that we will visualize the
+    # inputs as a matrix instead of traces, as we have done before.
     im = ax[0].imshow(obs[trial].T, aspect='auto', vmin=0, vmax=1)
     ax[0].set_title('Observations')
     ax[0].set_ylabel('Stimuli')
@@ -123,7 +124,8 @@ def plot_activity(activity, obs, config, trial):
     plt.tight_layout()
 
 
-def analysis_activity_by_condition(activity, info, config, conditions=['choice']):
+def analysis_activity_by_condition(activity, info, config,
+                                   conditions=['choice']):
     """
     Plot single neuron activity by condition.
     """
@@ -133,8 +135,8 @@ def analysis_activity_by_condition(activity, info, config, conditions=['choice']
             values), sharex=True, dpi=150)
         t_plot = np.arange(activity.shape[1]) * config['dt']
         for i_v, value in enumerate(values):
-            # INSTRUCTION 13: plot the average activity across neurons and trials
-            # for each condition
+            # INSTRUCTION 13: plot the average activity across neurons and
+            # trials for each condition
             a = activity[info[condition] == value]
             ax[i_v].imshow(a.mean(axis=0).T, aspect='auto', cmap='viridis')
             ax[i_v].set_xlabel('Time (ms)')
@@ -144,7 +146,8 @@ def analysis_activity_by_condition(activity, info, config, conditions=['choice']
             ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
             ax[1].set_xticklabels(t_plot[::10])
 
-        # plt.legend(title=condition, loc='center left', bbox_to_anchor=(1.0, 0.5))
+        # plt.legend(title=condition, loc='center left',
+        # bbox_to_anchor=(1.0, 0.5))
 
 
 def probit(x, beta, alpha):
@@ -205,7 +208,8 @@ if __name__ == '__main__':
     trial_count = 0
     for stp in range(int(num_steps)):
         action = env.action_space.sample()
-        # You can also try to set the action to one constant value, e.g. action = 1
+        # You can also try to set the action to one constant value,
+        # e.g. action = 1
         ob, rew, done, info = env.step(action)
         inputs.append(ob)
         actions.append(action)
@@ -237,7 +241,8 @@ if __name__ == '__main__':
     ax[1].legend()
     ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], perf, label='perf')
     ax[2].set_ylabel('Performance')
-    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], rew_mat, label='perf')
+    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], rew_mat,
+               label='perf')
     ax[3].set_ylabel('Reward')
     ax[3].set_xlabel('Time (ms)')
 
@@ -245,7 +250,7 @@ if __name__ == '__main__':
 
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
-                  'input_size': env.observation_space.n}  # instead of env.observation_space.shape
+                  'input_size': env.observation_space.n}
 
     net = Net(input_size=env.observation_space.n,
               hidden_size=net_kwargs['hidden_size'],
@@ -287,8 +292,8 @@ if __name__ == '__main__':
         # accumulate across epochs
         optimizer.zero_grad()
 
-        # INSTRUCTION 3: FORWARD PASS: get the output of the network for a given
-        # input
+        # INSTRUCTION 3: FORWARD PASS: get the output of the network for a
+        # given input
         outputs, _ = net(inputs)
 
         # reshape outputs so they have the same shape as labels
@@ -348,7 +353,8 @@ if __name__ == '__main__':
         # how many trials to run
         num_trial = 1000
 
-        # empty lists / dataframe to store activity, choices, and trial information
+        # empty lists / dataframe to store activity, choices, and trial
+        # inforation
         activity = list()
         obs = list()
         info = pd.DataFrame()
@@ -360,8 +366,8 @@ if __name__ == '__main__':
 
         # read out the inputs in that trial
         inputs = torch.from_numpy(env.ob[:, np.newaxis]).type(torch.float)
-        # as before you can print the shapes of the variables to understand what
-        # they are and how to use them
+        # as before you can print the shapes of the variables to understand
+        # what they are and how to use them
         # do this for the rest of the variables as you build the code
         if i == 0:
             print('Shape of inputs: ' + str(inputs.shape))
@@ -385,7 +391,8 @@ if __name__ == '__main__':
         trial_info = env.trial
         # write choices and outcome
         trial_info.update({'correct': correct, 'choice': choice})
-        info = info._append(trial_info, ignore_index=True)
+        trial_info = pd.DataFrame(trial_info, index=[0])
+        info = pd.concat([info, trial_info], ignore_index=True)
 
         # Log activity
         activity.append(np.array(hidden)[:, 0])
@@ -395,8 +402,20 @@ if __name__ == '__main__':
 
     print('Average performance', np.mean(info['correct']))
 
-    activity = np.array(activity)
-    obs = np.array(obs)
+    # add zeros at the beggining of the arrays to make them equal size
+    activity_max_length = max(len(arr) for arr in activity)
+    equalized_activity = []
+    for arr in activity:
+        arr = np.pad(arr, (activity_max_length - len(arr), 0), mode='constant')
+        equalized_activity.append(arr)
+    activity = np.array(equalized_activity)
+
+    obs_max_length = max(len(arr) for arr in obs)
+    equalized_obs = []
+    for arr in obs:
+        arr = np.pad(arr, (obs_max_length - len(arr), 0), mode='constant')
+        equalized_obs.append(arr)
+    obs = np.array(equalized_obs)
 
     # print stats of the activity: max, min, mean, std
     print('Activity stats:')
@@ -410,11 +429,11 @@ if __name__ == '__main__':
     print('Info dataframe:')
     print(info.head())
 
-    # Plot the psychometric curve. You can use the function you wrote in the first
-    # tutorial.
+    # Plot the psychometric curve. You can use the function you wrote in the
+    # first tutorial.
 
-    # plot the probability of choosing right as a function of the signed coherence
-    # and then fit a psychometric curve to the data.
+    # plot the probability of choosing right as a function of the signed
+    # coherence and then fit a psychometric curve to the data.
     mpl.rcParams['font.family'] = ['DejaVu Serif']
 
     f, ax = plt.subplots(1, 1, figsize=(3, 3), dpi=150)
@@ -427,12 +446,13 @@ if __name__ == '__main__':
     # get signed coherence
     signed_coherence = np.copy(coherence)
     signed_coherence[gt == 0] = -signed_coherence[gt == 0]
-    # INSTRUCTION 10: plot the probability of choosing right as a function of the
-    # signed coherence
+    # INSTRUCTION 10: plot the probability of choosing right as a function of
+    # the signed coherence
     for sc in signed_coherence:
         prob_right = np.mean(choice_01[signed_coherence == sc])
         std_right = np.std(
-            choice_01[signed_coherence == sc])/np.sqrt(np.sum(signed_coherence == sc))
+            choice_01[signed_coherence == sc])/np.sqrt(np.sum(
+                signed_coherence == sc))
         ax.errorbar(sc, prob_right, yerr=std_right, color='k')
         ax.plot(sc, prob_right, 'o', color='k')
         ax.set_xlabel('Signed coherence')
@@ -452,7 +472,8 @@ if __name__ == '__main__':
     # silent neurons
     clean_activity = activity[:, :, np.delete(
         np.arange(activity.shape[-1]), silent_idx)]
-    plot_activity(activity=clean_activity, obs=obs, config=training_kwargs, trial=0)
+    plot_activity(activity=clean_activity, obs=obs, config=training_kwargs,
+                  trial=0)
 
     # min_max scaling
     minmax_activity = np.array(
