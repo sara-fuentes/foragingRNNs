@@ -359,48 +359,48 @@ if __name__ == '__main__':
         obs = list()
         info = pd.DataFrame()
 
-    for i in range(num_trial):
+        for i in range(num_trial):
+    
+            # create new trial
+            env.new_trial()
+    
+            # read out the inputs in that trial
+            inputs = torch.from_numpy(env.ob[:, np.newaxis]).type(torch.float)
+            # as before you can print the shapes of the variables to understand
+            # what they are and how to use them
+            # do this for the rest of the variables as you build the code
+            if i == 0:
+                print('Shape of inputs: ' + str(inputs.shape))
+            # INSTRUCTION 7: get the network's prediction for the current input
+            action_pred, hidden = net(inputs)
+            action_pred = action_pred.detach().numpy()
+    
+            # INSTRUCTION 8: get the network's choice.
+            # Take into account the shape of action_pred. Remember that the network
+            # makes a prediction for each time step in the trial.
+            # Which is the prediction we really care about when evaluating the
+            # network's performance?
+            choice = np.argmax(action_pred[-1, 0])
+    
+            # INSTRUCTION 9: check if the choice is correct
+            # Again, which is the target we want when evaluating the network's
+            # performance?
+            correct = choice == env.gt[-1]
+    
+            # Log trial info
+            trial_info = env.trial
+            # write choices and outcome
+            trial_info.update({'correct': correct, 'choice': choice})
+            trial_info = pd.DataFrame(trial_info, index=[0])
+            info = pd.concat([info, trial_info], ignore_index=True)
+            
+            # Log activity
+            activity.append(np.array(hidden)[:, 0])
+    
+            # Log the inputs (or observations) received by the network
+            obs.append(env.ob)
 
-        # create new trial
-        env.new_trial()
-
-        # read out the inputs in that trial
-        inputs = torch.from_numpy(env.ob[:, np.newaxis]).type(torch.float)
-        # as before you can print the shapes of the variables to understand
-        # what they are and how to use them
-        # do this for the rest of the variables as you build the code
-        if i == 0:
-            print('Shape of inputs: ' + str(inputs.shape))
-        # INSTRUCTION 7: get the network's prediction for the current input
-        action_pred, hidden = net(inputs)
-        action_pred = action_pred.detach().numpy()
-
-        # INSTRUCTION 8: get the network's choice.
-        # Take into account the shape of action_pred. Remember that the network
-        # makes a prediction for each time step in the trial.
-        # Which is the prediction we really care about when evaluating the
-        # network's performance?
-        choice = np.argmax(action_pred[-1, 0])
-
-        # INSTRUCTION 9: check if the choice is correct
-        # Again, which is the target we want when evaluating the network's
-        # performance?
-        correct = choice == env.gt[-1]
-
-        # Log trial info
-        trial_info = env.trial
-        # write choices and outcome
-        trial_info.update({'correct': correct, 'choice': choice})
-        trial_info = pd.DataFrame(trial_info, index=[0])
-        info = pd.concat([info, trial_info], ignore_index=True)
-
-        # Log activity
-        activity.append(np.array(hidden)[:, 0])
-
-        # Log the inputs (or observations) received by the network
-        obs.append(env.ob)
-
-    print('Average performance', np.mean(info['correct']))
+        print('Average performance', np.mean(info['correct']))
 
     # add zeros at the beggining of the arrays to make them equal size
     activity_max_length = max(len(arr) for arr in activity)
