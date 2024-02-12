@@ -389,6 +389,7 @@ if __name__ == '__main__':
 
         # Log trial info
         trial_info = env.trial
+        trial_info['probs'] = [trial_info['probs']]
         # write choices and outcome
         trial_info.update({'correct': correct, 'choice': choice})
         trial_info = pd.DataFrame(trial_info, index=[0])
@@ -442,26 +443,26 @@ if __name__ == '__main__':
     choice_01 = np.copy(choice)
     choice_01 -= 1
     gt = info['ground_truth'].values
-    coherence = info['coh'].values
+    # coherence = info['coh'].values
     # get signed coherence
-    signed_coherence = np.copy(coherence)
-    signed_coherence[gt == 0] = -signed_coherence[gt == 0]
+    # signed_coherence = np.copy(coherence)
+    # signed_coherence[gt == 0] = -signed_coherence[gt == 0]
     # INSTRUCTION 10: plot the probability of choosing right as a function of
     # the signed coherence
-    for sc in signed_coherence:
-        prob_right = np.mean(choice_01[signed_coherence == sc])
-        std_right = np.std(
-            choice_01[signed_coherence == sc])/np.sqrt(np.sum(
-                signed_coherence == sc))
-        ax.errorbar(sc, prob_right, yerr=std_right, color='k')
-        ax.plot(sc, prob_right, 'o', color='k')
-        ax.set_xlabel('Signed coherence')
-        ax.set_ylabel('P(right)')
-    # fit psychometric curve
-    pars, _ = curve_fit(probit, signed_coherence, choice_01, p0=[0, 1])
-    x = np.linspace(-50, 50, 100)
-    ax.plot(x, probit(x, *pars), color='k')
-    plt.show()
+    # for sc in signed_coherence:
+    #     prob_right = np.mean(choice_01[signed_coherence == sc])
+    #     std_right = np.std(
+    #         choice_01[signed_coherence == sc])/np.sqrt(np.sum(
+    #             signed_coherence == sc))
+    #     ax.errorbar(sc, prob_right, yerr=std_right, color='k')
+    #     ax.plot(sc, prob_right, 'o', color='k')
+    #     ax.set_xlabel('Signed coherence')
+    #     ax.set_ylabel('P(right)')
+    # # fit psychometric curve
+    # pars, _ = curve_fit(probit, signed_coherence, choice_01, p0=[0, 1])
+    # x = np.linspace(-50, 50, 100)
+    # ax.plot(x, probit(x, *pars), color='k')
+    # plt.show()
 
     plot_activity(activity=activity, obs=obs, config=training_kwargs, trial=0)
 
