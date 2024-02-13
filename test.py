@@ -93,17 +93,17 @@ class Net(nn.Module):
         return x, out
 
 
-def plot_activity(activity, obs, config, trial):
+def plot_activity(activity, obs, actions, config, trial):
 
     # Load and preprocess results
-    f, ax = plt.subplots(figsize=(5, 4), nrows=2, dpi=150)
+    f, ax = plt.subplots(figsize=(5, 4), nrows=3, dpi=150)
 
     # time in ms
     t_plot = np.arange(activity.shape[1]) * config['dt']
 
     # plot the observations for one trial. Note that we will visualize the
     # inputs as a matrix instead of traces, as we have done before.
-    im = ax[0].imshow(obs[trial].T, aspect='auto', vmin=0, vmax=1)
+    im = ax[0].plot(obs[trial])
     ax[0].set_title('Observations')
     ax[0].set_ylabel('Stimuli')
 
@@ -114,12 +114,17 @@ def plot_activity(activity, obs, config, trial):
     # INSTRUCTION 11: plot the activity for one trial
     im = ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
     ax[1].set_title('Activity')
-    ax[1].set_xlabel('Time (ms)')
     ax[1].set_ylabel('Neurons')
     plt.colorbar(im, ax=ax[1])
     # change the xticks to show time in ms
     ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
     ax[1].set_xticklabels(t_plot[::10])
+
+    im = ax[2].plot(actions[trial])
+    ax[2].set_title('Actions')
+    ax[2].set_xlabel('Time (ms)')
+    ax[2].set_ylabel('Action')
+    # change the xticks to show time in ms
 
     plt.tight_layout()
 
@@ -199,7 +204,6 @@ if __name__ == '__main__':
     print('Example labels:')
     print(labels[:20, 0])
 
-    mpl.rcParams['font.family'] = ['DejaVu Serif']
     num_steps = 40
     inputs = []
     actions = []
@@ -328,14 +332,6 @@ if __name__ == '__main__':
 
     # Environment
     env = gym.make(TASK, **training_kwargs['env_kwargs'])
-    try:
-        env.timing = training_kwargs['env_kwargs']['timing']
-    except KeyError:
-        timing = {}
-        for period in env.timing.keys():
-            period_times = [env.sample_time(period) for _ in range(100)]
-            timing[period] = np.median(period_times)
-        env.timing = timing
     env.reset(no_step=True)  # this is to initialize the environment
 
     # Since we will not train the network anymore, we can turn off the gradient
@@ -358,8 +354,8 @@ if __name__ == '__main__':
         # inforation
         activity = list()
         obs = list()
+        actions = list()
         info = pd.DataFrame()
-
         for i in range(num_trial):
             # create new trial
             env.new_trial()
@@ -369,8 +365,7 @@ if __name__ == '__main__':
             # as before you can print the shapes of the variables to understand
             # what they are and how to use them
             # do this for the rest of the variables as you build the code
-            if i == 0:
-                print('Shape of inputs: ' + str(inputs.shape))
+            print('Shape of inputs: ' + str(inputs.shape))
             # INSTRUCTION 7: get the network's prediction for the current input
             action_pred, hidden = net(inputs)
             action_pred = action_pred.detach().numpy()
@@ -397,13 +392,17 @@ if __name__ == '__main__':
 
             # Log activity
             activity.append(np.array(hidden)[:, 0])
+            # log actions
+            actions.append(action_pred)
 
             # Log the inputs (or observations) received by the network
             obs.append(env.ob)
 
-        print('Average performance', np.mean(info['correct']))
+    print('Average performance', np.mean(info['correct']))
+    # print stats of the activity: max, min, mean, std
 
     # add zeros at the beggining of the arrays to make them equal size
+    # TODO: move to a function
     activity_max_length = max(len(arr) for arr in activity)
     equalized_activity = []
     for arr in activity:
@@ -417,8 +416,14 @@ if __name__ == '__main__':
         arr = np.pad(arr, (obs_max_length - len(arr), 0), mode='constant')
         equalized_obs.append(arr)
     obs = np.array(equalized_obs)
+    
+    # TODO: pad actions
+    
+    activity = np.array(activity)
+    obs = np.array(obs)
+    actions = np.array(actions)
 
-    # print stats of the activity: max, min, mean, std
+
     print('Activity stats:')
     print('Max: ' + str(np.max(activity)) +
           ', Min: ' + str(np.min(activity)) +
@@ -426,46 +431,12 @@ if __name__ == '__main__':
           ', Std: ' + str(np.std(activity)) +
           ', Shape: ' + str(activity.shape))
 
+
     # print the variables in the info dataframe
     print('Info dataframe:')
     print(info.head())
 
-    # Plot the psychometric curve. You can use the function you wrote in the
-    # first tutorial.
-
-    # plot the probability of choosing right as a function of the signed
-    # coherence and then fit a psychometric curve to the data.
-    mpl.rcParams['font.family'] = ['DejaVu Serif']
-
-    f, ax = plt.subplots(1, 1, figsize=(3, 3), dpi=150)
-    choice = info['choice'].values
-    # translate choice to 0 and 1
-    choice_01 = np.copy(choice)
-    choice_01 -= 1
-    gt = info['ground_truth'].values
-    coherence = info['coh'].values
-    # get signed coherence
-    signed_coherence = np.copy(coherence)
-    signed_coherence[gt == 0] = -signed_coherence[gt == 0]
-    # INSTRUCTION 10: plot the probability of choosing right as a function of
-    # the signed coherence
-    for sc in signed_coherence:
-        prob_right = np.mean(choice_01[signed_coherence == sc])
-        std_right = np.std(
-            choice_01[signed_coherence == sc])/np.sqrt(np.sum(
-                signed_coherence == sc))
-        ax.errorbar(sc, prob_right, yerr=std_right, color='k')
-        ax.plot(sc, prob_right, 'o', color='k')
-        ax.set_xlabel('Signed coherence')
-        ax.set_ylabel('P(right)')
-    # fit psychometric curve
-    pars, _ = curve_fit(probit, signed_coherence, choice_01, p0=[0, 1])
-    x = np.linspace(-50, 50, 100)
-    ax.plot(x, probit(x, *pars), color='k')
-    plt.show()
-
-    plot_activity(activity=activity, obs=obs, config=training_kwargs, trial=0)
-
+    # plot trial
     silent_idx = np.where(activity.sum(axis=(0, 1)) == 0)[0]
 
     print('fraction of silent neurons:', len(silent_idx)/activity.shape[-1])
@@ -473,8 +444,6 @@ if __name__ == '__main__':
     # silent neurons
     clean_activity = activity[:, :, np.delete(
         np.arange(activity.shape[-1]), silent_idx)]
-    plot_activity(activity=clean_activity, obs=obs, config=training_kwargs,
-                  trial=0)
 
     # min_max scaling
     minmax_activity = np.array(
@@ -482,104 +451,5 @@ if __name__ == '__main__':
     minmax_activity = np.array(
         [neuron/neuron.max() for neuron in minmax_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
 
-    plot_activity(activity=minmax_activity, obs=obs, config=training_kwargs, trial=0)
-    # other conds: correct, ground_truth
-    analysis_activity_by_condition(minmax_activity, info, training_kwargs,
-                                   conditions=['choice'])
-
-    # number of CV splits
-    n_splits = 100
-
-    # set
-    mean_acc = np.zeros([n_splits, minmax_activity.shape[1]]) * np.nan
-
-    for i in range(n_splits):
-
-        # transpose tensor to be shape [trials, time, neurons]
-        for xi, x in enumerate(minmax_activity.transpose(1, 0, 2)):
-
-            # INSTRUCTION 14: split data into train and test sets using sklms.
-            x_train, x_test, y_train, y_test = sklms.train_test_split(
-                x, info.ground_truth.values, random_state=i)
-
-            # INSTRUCTION 15: fit a linear discriminant analysis model to the
-            # training data using sklda
-            lda_fitted = sklda.LinearDiscriminantAnalysis(
-                solver='lsqr').fit(X=x_train, y=y_train)
-
-            # INSTRUCTION 16: predict the labels for the test data
-            y_pred = lda_fitted.predict(x_test)
-
-            # INSTRUCTION 17: compute the accuracy of the model
-            correct = 1 - np.abs(y_pred - y_test)
-
-            mean_acc[i, xi] = correct.mean()
-
-    # calculate 95% CI
-    ci_acc = np.percentile(mean_acc, [5, 95], axis=0)
-
-    # for plotting: time axis, stim and resp times
-    t_plot = np.arange(activity.shape[1]) * training_kwargs['dt']
-    stim_onset = t_plot[np.where(obs[0, :, 1] != 0)[0][0]]
-    resp_onset = t_plot[np.where(obs[0, :, 0] != 1)[0][0]]
-
-    # plot linear classification accuracy
-    plt.figure(figsize=(4, 3), dpi=150)
-    plt.plot(t_plot, np.zeros(mean_acc.shape[1])+.5, 'k--', alpha=.2)
-    plt.plot(stim_onset, .48, '^', color='r', ms=10)
-    plt.plot(resp_onset, .48, '^', color='b', ms=10)
-    plt.plot(t_plot, np.mean(mean_acc, axis=0), 'k')
-    plt.fill_between(t_plot, ci_acc[0], ci_acc[1], color='k', alpha=.2)
-    plt.ylabel('classification accuracy')
-    plt.xlabel('time')
-    plt.xlim(t_plot[0], t_plot[-1])
-
-    mean_acc = np.zeros([len(np.unique(info.coh.values)),
-                        n_splits, minmax_activity.shape[1]])
-
-    for ci, c in enumerate(np.unique(info.coh.values)):
-
-        # INSTRUCTION 18: get the indices of the trials with the current coherence
-        cidx = np.where(info.coh.values == c)
-
-        for i in range(n_splits):
-
-            # transpose tensor to be shape [trials, time, neurons]
-            for xi, x in enumerate(minmax_activity[cidx].transpose(1, 0, 2)):
-
-                # train-test-split
-                x_train, x_test, y_train, y_test = sklms.train_test_split(
-                    x, info.ground_truth.values[cidx], random_state=i)
-
-                # fit to train data
-                lda_fitted = sklda.LinearDiscriminantAnalysis(
-                    solver='lsqr').fit(X=x_train, y=y_train)
-
-                # predict test set labels
-                y_pred = lda_fitted.predict(x_test)
-
-                # is the response correct for each trial?
-                correct = 1 - np.abs(y_pred - y_test)
-
-                mean_acc[ci, i, xi] = correct.mean()
-
-    # colors corresponding to different values of color gradient
-    colors = plt.get_cmap('magma')(np.linspace(
-        0.1, .9, len(np.unique(info.coh.values))))
-
-    # plot linear classification accuracy
-    plt.figure(figsize=(4, 3), dpi=120)
-
-    # plot mean acc for each coherence level
-    for ci in range(len(np.unique(info.coh.values))):
-        plt.plot(t_plot, np.mean(
-            mean_acc[ci], axis=0), color=colors[ci],
-            label=np.unique(info.coh.values)[ci])
-
-    plt.plot(t_plot, np.zeros(mean_acc[ci].shape[1])+.5, 'k--', alpha=.2)
-    plt.plot(stim_onset, .48, '^', color='k', ms=10)
-    plt.plot(resp_onset, .48, '^', color='k', ms=10)
-    plt.ylabel('classification accuracy')
-    plt.xlabel('time')
-    plt.xlim(t_plot[0], t_plot[-1])
-    plt.legend(frameon=False)
+    plot_activity(activity=minmax_activity, obs=obs, actions=actions,
+                  config=training_kwargs, trial=0)
