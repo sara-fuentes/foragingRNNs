@@ -175,6 +175,7 @@ def probit(x, beta, alpha):
 
 # --- MAIN
 if __name__ == '__main__':
+    plt.close('all')
     # Set up config:
     training_kwargs = {'dt': 100,
                        'lr': 1e-2,
@@ -359,47 +360,46 @@ if __name__ == '__main__':
         obs = list()
         info = pd.DataFrame()
 
-    for i in range(num_trial):
+        for i in range(num_trial):
+            # create new trial
+            env.new_trial()
+            # read out the inputs in that trial
+            inputs = env.ob[:, np.newaxis, np.newaxis]
+            inputs = torch.from_numpy(inputs).type(torch.float)
+            # as before you can print the shapes of the variables to understand
+            # what they are and how to use them
+            # do this for the rest of the variables as you build the code
+            if i == 0:
+                print('Shape of inputs: ' + str(inputs.shape))
+            # INSTRUCTION 7: get the network's prediction for the current input
+            action_pred, hidden = net(inputs)
+            action_pred = action_pred.detach().numpy()
 
-        # create new trial
-        env.new_trial()
+            # INSTRUCTION 8: get the network's choice.
+            # Take into account the shape of action_pred. Remember that the network
+            # makes a prediction for each time step in the trial.
+            # Which is the prediction we really care about when evaluating the
+            # network's performance?
+            choice = np.argmax(action_pred[-1, 0])
 
-        # read out the inputs in that trial
-        inputs = torch.from_numpy(env.ob[:, np.newaxis]).type(torch.float)
-        # as before you can print the shapes of the variables to understand
-        # what they are and how to use them
-        # do this for the rest of the variables as you build the code
-        if i == 0:
-            print('Shape of inputs: ' + str(inputs.shape))
-        # INSTRUCTION 7: get the network's prediction for the current input
-        action_pred, hidden = net(inputs)
-        action_pred = action_pred.detach().numpy()
+            # INSTRUCTION 9: check if the choice is correct
+            # Again, which is the target we want when evaluating the network's
+            # performance?
+            correct = choice == env.gt[-1]
 
-        # INSTRUCTION 8: get the network's choice.
-        # Take into account the shape of action_pred. Remember that the network
-        # makes a prediction for each time step in the trial.
-        # Which is the prediction we really care about when evaluating the
-        # network's performance?
-        choice = np.argmax(action_pred[-1, 0])
+            # Log trial info
+            trial_info = env.trial
+            trial_info['probs'] = [trial_info['probs']]
+            # write choices and outcome
+            trial_info.update({'correct': correct, 'choice': choice})
+            trial_info = pd.DataFrame(trial_info, index=[0])
+            info = pd.concat([info, trial_info], ignore_index=True)
 
-        # INSTRUCTION 9: check if the choice is correct
-        # Again, which is the target we want when evaluating the network's
-        # performance?
-        correct = choice == env.gt[-1]
+            # Log activity
+            activity.append(np.array(hidden)[:, 0])
 
-        # Log trial info
-        trial_info = env.trial
-        trial_info['probs'] = [trial_info['probs']]
-        # write choices and outcome
-        trial_info.update({'correct': correct, 'choice': choice})
-        trial_info = pd.DataFrame(trial_info, index=[0])
-        info = pd.concat([info, trial_info], ignore_index=True)
-
-        # Log activity
-        activity.append(np.array(hidden)[:, 0])
-
-        # Log the inputs (or observations) received by the network
-        obs.append(env.ob)
+            # Log the inputs (or observations) received by the network
+            obs.append(env.ob)
 
         print('Average performance', np.mean(info['correct']))
 
@@ -443,26 +443,26 @@ if __name__ == '__main__':
     choice_01 = np.copy(choice)
     choice_01 -= 1
     gt = info['ground_truth'].values
-    # coherence = info['coh'].values
+    coherence = info['coh'].values
     # get signed coherence
-    # signed_coherence = np.copy(coherence)
-    # signed_coherence[gt == 0] = -signed_coherence[gt == 0]
+    signed_coherence = np.copy(coherence)
+    signed_coherence[gt == 0] = -signed_coherence[gt == 0]
     # INSTRUCTION 10: plot the probability of choosing right as a function of
     # the signed coherence
-    # for sc in signed_coherence:
-    #     prob_right = np.mean(choice_01[signed_coherence == sc])
-    #     std_right = np.std(
-    #         choice_01[signed_coherence == sc])/np.sqrt(np.sum(
-    #             signed_coherence == sc))
-    #     ax.errorbar(sc, prob_right, yerr=std_right, color='k')
-    #     ax.plot(sc, prob_right, 'o', color='k')
-    #     ax.set_xlabel('Signed coherence')
-    #     ax.set_ylabel('P(right)')
-    # # fit psychometric curve
-    # pars, _ = curve_fit(probit, signed_coherence, choice_01, p0=[0, 1])
-    # x = np.linspace(-50, 50, 100)
-    # ax.plot(x, probit(x, *pars), color='k')
-    # plt.show()
+    for sc in signed_coherence:
+        prob_right = np.mean(choice_01[signed_coherence == sc])
+        std_right = np.std(
+            choice_01[signed_coherence == sc])/np.sqrt(np.sum(
+                signed_coherence == sc))
+        ax.errorbar(sc, prob_right, yerr=std_right, color='k')
+        ax.plot(sc, prob_right, 'o', color='k')
+        ax.set_xlabel('Signed coherence')
+        ax.set_ylabel('P(right)')
+    # fit psychometric curve
+    pars, _ = curve_fit(probit, signed_coherence, choice_01, p0=[0, 1])
+    x = np.linspace(-50, 50, 100)
+    ax.plot(x, probit(x, *pars), color='k')
+    plt.show()
 
     plot_activity(activity=activity, obs=obs, config=training_kwargs, trial=0)
 
