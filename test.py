@@ -39,7 +39,7 @@ sys.path.append('C:/Users/saraf')
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-TASK = 'Foraging-v0'
+TASK = 'ForagingBlocks-v0'
 
 
 def get_modelpath(TASK):
@@ -103,12 +103,12 @@ def plot_activity(activity, obs, actions, config, trial):
 
     # plot the observations for one trial. Note that we will visualize the
     # inputs as a matrix instead of traces, as we have done before.
-    im = ax[0].plot(obs[trial])
+    ax[0].plot(obs[trial])
     ax[0].set_title('Observations')
     ax[0].set_ylabel('Stimuli')
     # change the xticks to show time in ms
     # INSTRUCTION 11: plot the activity for one trial
-    im = ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
+    ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
     ax[1].set_title('Activity')
     ax[1].set_ylabel('Neurons')
     # plt.colorbar(im, ax=ax[1])
@@ -116,7 +116,7 @@ def plot_activity(activity, obs, actions, config, trial):
     ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
     ax[1].set_xticklabels(t_plot[::10])
 
-    im = ax[2].plot(actions[trial])
+    ax[2].plot(actions[trial])
     ax[2].set_title('Actions')
     ax[2].set_xlabel('Time (ms)')
     ax[2].set_ylabel('Action')
@@ -217,7 +217,8 @@ if __name__ == '__main__':
                        'seq_len': 100,
                        'TASK': TASK}
 
-    env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8])}
+    env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8]),
+                  'blk_dur': 5}
 
     # call function to sample
     dataset, env = get_dataset(
@@ -232,7 +233,7 @@ if __name__ == '__main__':
     print('Example labels:')
     print(labels[:20, 0])
 
-    num_steps = 40
+    num_steps = 400
     inputs = []
     actions = []
     gt = []
@@ -393,7 +394,7 @@ if __name__ == '__main__':
             # as before you can print the shapes of the variables to understand
             # what they are and how to use them
             # do this for the rest of the variables as you build the code
-            if i==0:
+            if i == 0:
                 print('Shape of inputs: ' + str(inputs.shape))
             # INSTRUCTION 7: get the network's prediction for the current input
             action_pred, hidden = net(inputs)
@@ -446,7 +447,6 @@ if __name__ == '__main__':
           ', Mean: ' + str(np.mean(activity)) +
           ', Std: ' + str(np.std(activity)) +
           ', Shape: ' + str(activity.shape))
-
 
     # print the variables in the info dataframe
     print('Info dataframe:')
