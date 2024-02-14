@@ -178,6 +178,39 @@ def probit(x, beta, alpha):
     return probit
 
 
+def equalize_arrays(array_list):
+    """
+    
+
+    Parameters
+    ----------
+    array_list : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    padded_arrays : TYPE
+        DESCRIPTION.
+
+    """
+    # Find the maximum shape among the arrays
+    max_shape = max(arr.shape[0] for arr in array_list)
+    
+    # Pad each array to match the maximum shape
+    padded_arrays = []
+    for arr in array_list:
+        if len(arr.shape) == 1:  # If the array is one-dimensional
+            pad_width = ((max_shape - arr.shape[0], 0))  # Pad at the beginning
+        elif len(arr.shape) == 2:  # If the array is two-dimensional
+            pad_width = ((max_shape - arr.shape[0], 0), (0, 0))
+        elif len(arr.shape) == 3:
+            pad_width = ((max_shape - arr.shape[0], 0), (0, 0), (0, 0))
+        padded_array = np.pad(arr, pad_width, mode='constant', constant_values=0)
+        padded_arrays.append(padded_array)
+    
+    return padded_arrays
+
+
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
@@ -403,26 +436,11 @@ if __name__ == '__main__':
 
     # add zeros at the beggining of the arrays to make them equal size
     # TODO: move to a function
-    activity_max_length = max(len(arr) for arr in activity)
-    equalized_activity = []
-    for arr in activity:
-        arr = np.pad(arr, (activity_max_length - len(arr), 0), mode='constant')
-        equalized_activity.append(arr)
-    activity = np.array(equalized_activity)
+    obs = np.array(equalize_arrays(obs))
+    activity = np.array(equalize_arrays(activity))
+    actions = np.array(equalize_arrays(actions))
 
-    obs_max_length = max(len(arr) for arr in obs)
-    equalized_obs = []
-    for arr in obs:
-        arr = np.pad(arr, (obs_max_length - len(arr), 0), mode='constant')
-        equalized_obs.append(arr)
-    obs = np.array(equalized_obs)
-    
     # TODO: pad actions
-    
-    activity = np.array(activity)
-    obs = np.array(obs)
-    actions = np.array(actions)
-
 
     print('Activity stats:')
     print('Max: ' + str(np.max(activity)) +
