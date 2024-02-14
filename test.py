@@ -106,16 +106,12 @@ def plot_activity(activity, obs, actions, config, trial):
     im = ax[0].plot(obs[trial])
     ax[0].set_title('Observations')
     ax[0].set_ylabel('Stimuli')
-
     # change the xticks to show time in ms
-    ax[0].set_xticks(np.arange(0, activity.shape[1], 10))
-    ax[0].set_xticklabels(t_plot[::10])
-    plt.colorbar(im, ax=ax[0])
     # INSTRUCTION 11: plot the activity for one trial
     im = ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
     ax[1].set_title('Activity')
     ax[1].set_ylabel('Neurons')
-    plt.colorbar(im, ax=ax[1])
+    # plt.colorbar(im, ax=ax[1])
     # change the xticks to show time in ms
     ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
     ax[1].set_xticklabels(t_plot[::10])
@@ -180,7 +176,6 @@ def probit(x, beta, alpha):
 
 def equalize_arrays(array_list):
     """
-    
 
     Parameters
     ----------
@@ -195,7 +190,7 @@ def equalize_arrays(array_list):
     """
     # Find the maximum shape among the arrays
     max_shape = max(arr.shape[0] for arr in array_list)
-    
+
     # Pad each array to match the maximum shape
     padded_arrays = []
     for arr in array_list:
@@ -207,7 +202,7 @@ def equalize_arrays(array_list):
             pad_width = ((max_shape - arr.shape[0], 0), (0, 0), (0, 0))
         padded_array = np.pad(arr, pad_width, mode='constant', constant_values=0)
         padded_arrays.append(padded_array)
-    
+
     return padded_arrays
 
 
@@ -398,9 +393,11 @@ if __name__ == '__main__':
             # as before you can print the shapes of the variables to understand
             # what they are and how to use them
             # do this for the rest of the variables as you build the code
-            print('Shape of inputs: ' + str(inputs.shape))
+            if i==0:
+                print('Shape of inputs: ' + str(inputs.shape))
             # INSTRUCTION 7: get the network's prediction for the current input
             action_pred, hidden = net(inputs)
+            action_pred = torch.nn.functional.softmax(action_pred, dim=2)
             action_pred = action_pred.detach().numpy()
 
             # INSTRUCTION 8: get the network's choice.
@@ -408,11 +405,12 @@ if __name__ == '__main__':
             # makes a prediction for each time step in the trial.
             # Which is the prediction we really care about when evaluating the
             # network's performance?
-            choice = np.argmax(action_pred[-1, 0])
+            actions_trial = np.argmax(action_pred[:, 0], axis=1)
 
             # INSTRUCTION 9: check if the choice is correct
             # Again, which is the target we want when evaluating the network's
             # performance?
+            choice = actions_trial[-1]
             correct = choice == env.gt[-1]
 
             # Log trial info
@@ -426,7 +424,7 @@ if __name__ == '__main__':
             # Log activity
             activity.append(np.array(hidden)[:, 0])
             # log actions
-            actions.append(action_pred)
+            actions.append(actions_trial)
 
             # Log the inputs (or observations) received by the network
             obs.append(env.ob)
