@@ -93,7 +93,7 @@ class Net(nn.Module):
         return x, out
 
 
-def plot_activity(activity, obs, actions, config, trial):
+def plot_activity(activity, obs, actions, gt, config, trial):
 
     # Load and preprocess results
     f, ax = plt.subplots(figsize=(5, 4), nrows=3, dpi=150)
@@ -116,7 +116,9 @@ def plot_activity(activity, obs, actions, config, trial):
     ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
     ax[1].set_xticklabels(t_plot[::10])
 
-    ax[2].plot(actions[trial])
+    ax[2].plot(actions[trial], label='actions')
+    ax[2].plot(gt[trial], '--', label='gt')
+    ax[2].legend()
     ax[2].set_title('Actions')
     ax[2].set_xlabel('Time (ms)')
     ax[2].set_ylabel('Action')
@@ -212,13 +214,13 @@ if __name__ == '__main__':
     # Set up config:
     training_kwargs = {'dt': 100,
                        'lr': 1e-2,
-                       'n_epochs': 400,  # 2000
+                       'n_epochs': 2000,  # 2000
                        'batch_size': 16,
                        'seq_len': 100,
                        'TASK': TASK}
 
     env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8]),
-                  'blk_dur': 5}
+                  'blk_dur': 50}
 
     # call function to sample
     dataset, env = get_dataset(
@@ -384,6 +386,7 @@ if __name__ == '__main__':
         activity = list()
         obs = list()
         actions = list()
+        gt = list()
         info = pd.DataFrame()
         for i in range(num_trial):
             # create new trial
@@ -426,6 +429,7 @@ if __name__ == '__main__':
             activity.append(np.array(hidden)[:, 0])
             # log actions
             actions.append(actions_trial)
+            gt.append(env.gt)
 
             # Log the inputs (or observations) received by the network
             obs.append(env.ob)
@@ -438,6 +442,7 @@ if __name__ == '__main__':
     obs = np.array(equalize_arrays(obs))
     activity = np.array(equalize_arrays(activity))
     actions = np.array(equalize_arrays(actions))
+    gt = np.array(equalize_arrays(gt))
 
     # TODO: pad actions
 
@@ -467,5 +472,5 @@ if __name__ == '__main__':
     minmax_activity = np.array(
         [neuron/neuron.max() for neuron in minmax_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
 
-    plot_activity(activity=minmax_activity, obs=obs, actions=actions,
+    plot_activity(activity=minmax_activity, obs=obs, actions=actions, gt=gt,
                   config=training_kwargs, trial=0)
