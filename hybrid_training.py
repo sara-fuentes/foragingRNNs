@@ -26,7 +26,7 @@ import random
 
 # import get_activity_lr_bf30Apr as ga
 import gym
-import neurogym as ngym  # need to import it so ngym envs are registered
+import ngym_foraging as ngym_f
 # import ngym_priors as ngym_p  # need to import it so ngym envs are registered
 # from neurogym.utils import plotting
 from neurogym.wrappers import ALL_WRAPPERS
@@ -44,6 +44,20 @@ from utils import get_name_and_command_from_dict as gncfd
 
 
 # ALL_WRAPPERS.update(all_wrpps_p)
+
+def set_global_seeds(seed):
+    """
+    set the seed for python random, tensorflow, numpy and gym spaces
+
+    :param seed: (int) the seed
+    """
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    # prng was removed in latest gym version
+    if hasattr(gym.spaces, 'prng'):
+        gym.spaces.prng.seed(seed)
+
 
 
 def sigmoid(x):
@@ -660,8 +674,6 @@ def arg_parser():
                         type=int, default=None)
     parser.add_argument('--seed', help='seed for task',
                         type=int, default=None)
-    parser.add_argument('--num_thrds', help='number of threads',
-                        type=int, default=None)
     parser.add_argument('--n_ch', help='number of choices',
                         type=int, default=None)
     parser.add_argument('--vanilla',
@@ -831,8 +843,8 @@ def get_algo(alg):
     return algo
 
 
-def run(alg, alg_kwargs, task, task_kwargs, wrappers_kwargs, expl_params,
-        rollout, n_ch, num_trials, folder, n_thrds, n_lstm, rank, vanilla=False,
+def run(task, task_kwargs, wrappers_kwargs, expl_params,
+        rollout, num_trials, folder, n_lstm, rank,
         alpha_net=0.1, rerun=False, sigma_net=0.0, test_kwargs={}, num_retrains=10,
         seed=0, train_mode=None, sl_kwargs=None, sv_values=False,
         sv_activity=True):
@@ -846,12 +858,11 @@ def run(alg, alg_kwargs, task, task_kwargs, wrappers_kwargs, expl_params,
     np.random.seed(int(time.time()))
     train_mode = train_mode or 'RL'
     files = []  # glob.glob(folder+'/*model*')
-    vars_ = {'alg': alg, 'alg_kwargs': alg_kwargs, 'task': task,
+    vars_ = {'task': task,
              'task_kwargs': task_kwargs, 'wrappers_kwargs': wrappers_kwargs,
-             'expl_params': expl_params, 'rollout': rollout, 'n_ch': n_ch,
-             'folder': folder, 'num_trials': num_trials, 'n_thrds': n_thrds,
-             'n_lstm': n_lstm, 'vanilla': vanilla, 'alpha_net': alpha_net,
-             'sigma_net': sigma_net}
+             'expl_params': expl_params, 'rollout': rollout,
+             'folder': folder, 'num_trials': num_trials, 'n_lstm': n_lstm,
+             'alpha_net': alpha_net, 'sigma_net': sigma_net}
     np.savez(folder + '/params.npz', **vars_)
     if len(files) == 0 or rerun:
         stps_ep = sl_kwargs['steps_per_epoch']
@@ -1122,10 +1133,10 @@ def run(alg, alg_kwargs, task, task_kwargs, wrappers_kwargs, expl_params,
                   perf, trial_count_perf)
 
             if train_slot:
-                dataset = ngym.Dataset(env, dataset_, wrapps=wraps_sl,
-                                       batch_size=sl_kwargs['btch_s'],
-                                       seq_len=rollout, n_ch=n_ch,
-                                       batch_first=True)
+                dataset = ngym_f.Dataset(env, dataset_, wrapps=wraps_sl,
+                                         batch_size=sl_kwargs['btch_s'],
+                                         seq_len=rollout, n_ch=n_ch,
+                                         batch_first=True)
                 # stages = iround//100
                 n_epochs = 5  # 10#100
                 # not keep best @YX-12May
@@ -1280,7 +1291,6 @@ if __name__ == "__main__":
     # update task params
     task_params = params.task_kwargs[gen_params['task']]
     update_dict(task_params, expl_params)
-    n_ch = int(task_params['n_ch'])
     # update wrappers params
     wrappers_kwargs = params.wrapps
     for wrap in wrappers_kwargs.keys():
@@ -1290,25 +1300,21 @@ if __name__ == "__main__":
     tr_md = gen_params['train_mode'] if 'train_mode' in gen_params.keys(
     ) else 'RL'
     task = gen_params['task']
-    alg = gen_params['alg']
-    alg_kwargs = params.algs[alg] if alg is not None else {}
     seed = int(gen_params['seed'])
     num_trials = int(gen_params['num_trials'])
     rollout = int(gen_params['rollout'])
     rank = int(gen_params['rank'])  # @logYX
-    num_thrds = int(gen_params['num_thrds'])
     n_lstm = int(gen_params['n_lstm'])
-    vanilla = gen_params['vanilla']
     alpha_net = float(gen_params['alpha_net'])
     sigma_net = float(gen_params['sigma_net'])
     task_kwargs = params.task_kwargs[gen_params['task']]
     # extra params
     test_kwargs = params.test_kwargs if hasattr(params, 'test_kwargs') else {}
     sl_kwargs = params.sl_kwargs if hasattr(params, 'sl_kwargs') else {}
-    _ = run(alg=alg, alg_kwargs=alg_kwargs, task=task, task_kwargs=task_kwargs,
+    _ = run(task=task, task_kwargs=task_kwargs,
             wrappers_kwargs=params.wrapps, expl_params=expl_params,
-            rollout=rollout, n_ch=n_ch, num_trials=num_trials,
-            folder=instance_folder, n_thrds=num_thrds, n_lstm=n_lstm, rank=rank,
+            rollout=rollout, num_trials=num_trials,
+            folder=instance_folder, n_lstm=n_lstm, rank=rank,
             test_kwargs=test_kwargs, seed=seed, train_mode=tr_md,
-            sl_kwargs=sl_kwargs, vanilla=vanilla, alpha_net=alpha_net,
+            sl_kwargs=sl_kwargs, alpha_net=alpha_net,
             sigma_net=sigma_net)
