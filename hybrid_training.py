@@ -39,11 +39,28 @@ from neurogym.wrappers import ALL_WRAPPERS
 
 from math import sqrt
 # import time
-from utils import rest_arg_parser
-from utils import get_name_and_command_from_dict as gncfd
 
 
 # ALL_WRAPPERS.update(all_wrpps_p)
+
+def get_name_and_command_from_dict(d):
+    name = ''
+    cmd = ''
+    for k in d.keys():
+        if k != 'folder':
+            if isinstance(d[k], list):
+                name += k + '_'
+                cmd += ' --' + k
+                for el in d[k]:
+                    name += str(el)
+                    cmd += ' ' + str(el)
+                name += '_'
+            else:
+                name += k + '_' + str(d[k]) + '_'
+                cmd += ' --' + k + ' ' + str(d[k])
+
+    return name[:-1], cmd
+
 
 def set_global_seeds(seed):
     """
@@ -102,16 +119,6 @@ def scratch_model(xstim, noise_std, r, h, wi, wrec, b, wo, alpha, hs):
     h = h+ns+alpha*(-h+(r@wrec.T)+xstim@wi)
     r = np.tanh(h+b)
     out = np.tanh(h)@wo
-    return r, h, out
-
-
-def scratch_model_lr(xstim, noise_std, r, h, wi, m, n, b, wo, alpha, hs):
-    if r is None:
-        r = np.tanh(h.copy())
-    ns = np.random.randn(hs)*noise_std
-    h = h+ns+alpha*(-h+(r@n)@m.T/hs+xstim@wi)
-    r = np.tanh(h+b)
-    out = np.tanh(h)@wo/hs
     return r, h, out
 
 
@@ -831,28 +838,13 @@ def make_env(env_id, rank, seed=0, wrapps={}, **kwargs):
     return _init
 
 
-def get_algo(alg):
-    if alg == "A2C":
-        from stable_baselines import A2C as algo
-    elif alg == "ACER":
-        from stable_baselines import ACER as algo
-    elif alg == "ACKTR":
-        from stable_baselines import ACKTR as algo
-    elif alg == "PPO2":
-        from stable_baselines import PPO2 as algo
-    return algo
-
-
 def run(task, task_kwargs, wrappers_kwargs, expl_params,
-        rollout, num_trials, folder, n_lstm, rank,
+        rollout, num_trials, folder, n_lstm,
         alpha_net=0.1, rerun=False, sigma_net=0.0, test_kwargs={}, num_retrains=10,
         seed=0, train_mode=None, sl_kwargs=None, sv_values=False,
         sv_activity=True):
 
     # reproducibility
-    # random.seed(seed+rank*10)
-    # torch.manual_seed(seed+rank*10)
-    # np.random.seed(seed+rank*10)
     random.seed(int(time.time()))
     torch.manual_seed(random.randint(1, 4098))  # datetime.datetime.now())
     np.random.seed(int(time.time()))
@@ -878,82 +870,32 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
         hidden_size = n_lstm
         input_size, output_size = obs_size, act_size
         noise_std = sigma_net  # 5e-2
-        rank = rank
 
-        wi_init, m_init, n_init, wo_init = None, None, None, None
-        model_name = 'model'
-        trained_files = glob.glob(folder+'/*'+model_name+'*')
-        print('.....files', trained_files)
-        if len(trained_files) > 0:
-            sorted_models, last_model = order_by_sufix(trained_files)
-            model_name = sorted_models[-1]
-            print('Loading model: ')
-            print(folder+'/'+model_name)
-            weight_file = folder+'/'+model_name
-            weights = np.load(weight_file)
-            m, n, b, wi_full, wo_full = weights['m'], weights['n'], weights['b'],\
-                weights['wi_full'], weights['wo_full']
-
-            hs_, inps_ = wi_full.shape[1], wi_full.shape[0]
-            hs_, outs_ = wo_full.shape[0], wo_full.shape[1]
-            rank_ = m.shape[1]
-            wi_init, m_init, n_init, wo_init =\
-                np.zeros((input_size, hs_)), np.zeros((hs_, rank)),\
-                np.zeros((hs_, rank)), np.zeros((hs_, output_size))
-            # reduce to one dimensional inputs
-            if inps_ > input_size:
-                wi_init[0, :] = wi_full[0, :].copy()
-                wi_init[1, :] = wi_full[1, :].copy()-wi_full[2, :].copy()
-                wi_init[-1, :] = wi_full[-1, :].copy()
-            elif inps_ < input_size:
-                wi_init[0, :] = wi_full[0, :].copy()
-                wi_init[1, :] = wi_full[1, :].copy()
-                wi_init[2, :] = -wi_full[1, :].copy()
-                wi_init[-1, :] = wi_full[-1, :].copy()
-            else:
-                wi_init = wi_full.copy()
-
-            wo_init[:, :outs_] = wo_full.copy()
-            for i in range(outs_, output_size):
-                idxrand = np.random.choice(
-                    len(wo_full.flatten()), hs_, replace=False)
-                wo_init[:, i] = wo_full.flatten()[idxrand]
-
-            m_init[:, :rank_] = m.copy()
-            for i in range(rank_, rank):
-                idxrand = np.random.choice(
-                    len(m.flatten()), hs_, replace=False)
-                m_init[:, i] = m.flatten()[idxrand]
-
-            n_init[:, :rank_] = n.copy()
-            for i in range(rank_, rank):
-                idxrand = np.random.choice(
-                    len(n.flatten()), hs_, replace=False)
-                n_init[:, i] = n.flatten()[idxrand]
-            wi_init = torch.from_numpy(wi_init).type(torch.cfloat)
-            m_init = torch.from_numpy(m_init).type(torch.cfloat)
-            n_init = torch.from_numpy(n_init).type(torch.cfloat)
-            wo_init = torch.from_numpy(wo_init).type(torch.cfloat)
-        # else:
-        #     return
-
-        model = LowRankRNN(input_size=input_size, hidden_size=hidden_size,
-                           output_size=output_size, noise_std=noise_std,
-                           alpha=alpha_net, rank=rank, train_wi=True,
-                           train_wo=True, wi_init=wi_init, m_init=m_init,
-                           n_init=n_init, wo_init=wo_init)
+        wi_init, wrec_init, wo_init =\
+            np.zeros((input_size, hidden_size)),\
+            np.zeros((hidden_size, hidden_size)),\
+            np.zeros((hidden_size, output_size))
+        wi_init = torch.from_numpy(wi_init).type(torch.cfloat)
+        wo_init = torch.from_numpy(wo_init).type(torch.cfloat)
+        wrec_init = torch.from_numpy(wrec_init).type(torch.cfloat)
+        model = FullRankRNN(input_size=input_size,
+                            hidden_size=hidden_size,
+                            output_size=output_size,
+                            noise_std=noise_std,
+                            alpha=alpha_net,
+                            train_wi=True, train_wo=True,
+                            wi_init=wi_init, wrec_init=wrec_init,
+                            wo_init=wo_init)
+        wrec = model.wrec.detach().cpu().numpy()
         print(model)
         # def scratch_model(xstim,noise_std,h,wi,m,n,b,wo,alpha,hs)
-        m, n = model.m.clone(), model.n.clone()
         wi_full, wo_full = model.wi_full.clone(), model.wo_full.clone()
         b = model.b.clone()
 
-        m, n = m.cpu(), n.cpu()
         wi_full = wi_full.cpu()
         wo_full = wo_full.cpu()
         b = b.cpu()
 
-        m, n = m.detach().numpy(), n.detach().numpy()
         b = b.detach().numpy()
         wi_full, wo_full = wi_full.detach().numpy(), wo_full.detach().numpy()
 
@@ -1045,9 +987,10 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
                 # rate, state, action_p =\
                 #     scratch_model_lr(stim[:,1:],noise_std,rate, hidden,
                 #                      wi_full,m,n,b,wo_full,alpha_net,hidden_size)
-                rate, state, action_p = scratch_model_lr(
-                    stim[:, :], noise_std, rate, hidden, wi_full, m, n, b,
-                    wo_full, alpha_net, hidden_size)
+                rate, state, action_p =\
+                    scratch_model(xstim=stim[:, :], noise_std=noise_std, r=rate,
+                                  h=hidden, wi=wi_full, wrec=wrec, b=b, wo=wo_full,
+                                  alpha=alpha_net, hs=hidden_size)
                 # one-dimensional output
                 if action_p[0, 0] > act_thred:
                     action = 2
@@ -1255,24 +1198,33 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
                                                alpha_net=alpha_net,
                                                **test_kwargs[key])
 
-
+# --- MAIN
 if __name__ == "__main__":
     # Usage:
     # python bsc_dataaugment.py --folder '' --seed 1 --alg ACER --n_ch 2
     #                           --rollout 60 --alpha_net 0.1 --n_lstm 512 --rank 3
     # get params from call
-    n_arg_parser = arg_parser()
-    expl_params, unknown_args = n_arg_parser.parse_known_args(sys.argv)
-    unkown_params = rest_arg_parser(unknown_args)
-    if unkown_params:
-        print('Unkown parameters: ', unkown_params)
-    expl_params = vars(expl_params)
-    expl_params = {k: expl_params[k] for k in expl_params.keys()
-                   if expl_params[k] is not None}
+    if len(sys.argv) > 1:
+        from utils import rest_arg_parser
+        n_arg_parser = arg_parser()
+        expl_params, unknown_args = n_arg_parser.parse_known_args(sys.argv)
+        unkown_params = rest_arg_parser(unknown_args)
+        if unkown_params:
+            print('Unkown parameters: ', unkown_params)
+
+        expl_params = vars(expl_params)
+        expl_params = {k: expl_params[k] for k in expl_params.keys()
+                       if expl_params[k] is not None}
+    else:
+        expl_params = {'seed': 1,
+                       'alpha_net': 0.5,
+                       'rollout': 30,
+                       'folder': "/home/molano/foragingRNNs/files/"}
+
     # folder /home/yshao/MLAuditory/results/vanilla_RNNs
     main_folder = expl_params['folder'] + '/'
     # main_folder = '/home/yshao/MLAuditory/results/vanilla_RNNs'
-    name, _ = gncfd(expl_params)
+    name, _ = get_name_and_command_from_dict(expl_params)
     instance_folder = main_folder + name + '/'
     # this is done wo the monitor wrapper's parameter folder is updated
     expl_params['folder'] = instance_folder
@@ -1303,7 +1255,6 @@ if __name__ == "__main__":
     seed = int(gen_params['seed'])
     num_trials = int(gen_params['num_trials'])
     rollout = int(gen_params['rollout'])
-    rank = int(gen_params['rank'])  # @logYX
     n_lstm = int(gen_params['n_lstm'])
     alpha_net = float(gen_params['alpha_net'])
     sigma_net = float(gen_params['sigma_net'])
@@ -1314,7 +1265,7 @@ if __name__ == "__main__":
     _ = run(task=task, task_kwargs=task_kwargs,
             wrappers_kwargs=params.wrapps, expl_params=expl_params,
             rollout=rollout, num_trials=num_trials,
-            folder=instance_folder, n_lstm=n_lstm, rank=rank,
+            folder=instance_folder, n_lstm=n_lstm,
             test_kwargs=test_kwargs, seed=seed, train_mode=tr_md,
             sl_kwargs=sl_kwargs, alpha_net=alpha_net,
             sigma_net=sigma_net)
