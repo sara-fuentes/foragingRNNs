@@ -6,8 +6,6 @@ Created on Wed Apr  8 07:26:31 2020
 @author: manuel
 
 """
-from ops.utils import rest_arg_parser
-from ops.utils import get_name_and_command_from_dict as gncfd
 import os
 import sys
 import numpy as np
@@ -26,13 +24,13 @@ import time
 import random
 # import datetime
 
-import get_activity_lr_bf30Apr as ga
+# import get_activity_lr_bf30Apr as ga
 import gym
 import neurogym as ngym  # need to import it so ngym envs are registered
 # import ngym_priors as ngym_p  # need to import it so ngym envs are registered
 # from neurogym.utils import plotting
 from neurogym.wrappers import ALL_WRAPPERS
-from ngym_priors.wrappers import ALL_WRAPPERS as all_wrpps_p
+# from ngym_priors.wrappers import ALL_WRAPPERS as all_wrpps_p
 # from stable_baselines.common.policies import LstmPolicy
 # from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 # from stable_baselines.common.vec_env import SubprocVecEnv
@@ -41,11 +39,11 @@ from ngym_priors.wrappers import ALL_WRAPPERS as all_wrpps_p
 
 from math import sqrt
 # import time
-sys.path.append('/home/molano/ngym_usage/contrib/priors/')
-sys.path.append('/home/molano/rnn4audition/ngym_priors/ngym_usage/priors/')
+from utils import rest_arg_parser
+from utils import get_name_and_command_from_dict as gncfd
 
 
-ALL_WRAPPERS.update(all_wrpps_p)
+# ALL_WRAPPERS.update(all_wrpps_p)
 
 
 def sigmoid(x):
