@@ -169,7 +169,7 @@ def equalize_arrays(array_list):
     return padded_arrays
 
 
-def run_agent_in_environment(num_steps, env):
+def run_agent_in_environment(num_steps_exp, env, model=None):
     """
     Run the agent in the environment for a specified number of steps.
 
@@ -196,7 +196,7 @@ def run_agent_in_environment(num_steps, env):
     gt = []
     perf = []
     rew_mat = []
-    for stp in range(int(num_steps)):
+    for stp in range(int(num_steps_exp)):
         if model is None:
             action = env.action_space.sample()
         else:
@@ -213,10 +213,10 @@ def run_agent_in_environment(num_steps, env):
             perf.append(info['performance'])
         else:
             perf.append(0)
-
+    # TODO: plug here perf, rew_mat, 
     data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt}
-    return perf, rew_mat, data
+    return data
 
 
 def show_task(env_kwargs, data, num_steps):
@@ -543,10 +543,10 @@ if __name__ == '__main__':
     for i in range(num_periods):
         data = run_agent_in_environment(num_steps=num_steps, env=env, model=model,
                                         num_steps_exp=num_steps_exp)
-
+        # TODO: build dataset with ob, reward
         model = train_network(num_epochs=num_epochs, data=data, net=net,
                               optimizer=optimizer, criterion=criterion, env=env,
-                              DEVICE=DEVICE, TASK=TASK)
+                              DEVICE=DEVICE, TASK=TASK, model=model)
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
