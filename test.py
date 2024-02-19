@@ -24,17 +24,11 @@ import sys
 sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
 sys.path.append('C:/Users/saraf')
 # packages to save data
-
 # packages to handle data
-
-
 # packages to visualize data
-
 # import gym and neurogym to create tasks
 # from neurogym.utils import plotting
-
 # import torch and neural network modules to build RNNs
-
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -91,40 +85,6 @@ class Net(nn.Module):
         out, _ = self.vanilla(x)
         x = self.linear(out)
         return x, out
-
-
-def plot_activity(activity, obs, actions, gt, config, trial):
-
-    # Load and preprocess results
-    f, ax = plt.subplots(figsize=(5, 4), nrows=3, dpi=150)
-
-    # time in ms
-    t_plot = np.arange(activity.shape[1]) * config['dt']
-
-    # plot the observations for one trial. Note that we will visualize the
-    # inputs as a matrix instead of traces, as we have done before.
-    ax[0].plot(obs[trial])
-    ax[0].set_title('Observations')
-    ax[0].set_ylabel('Stimuli')
-    # change the xticks to show time in ms
-    # INSTRUCTION 11: plot the activity for one trial
-    ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
-    ax[1].set_title('Activity')
-    ax[1].set_ylabel('Neurons')
-    # plt.colorbar(im, ax=ax[1])
-    # change the xticks to show time in ms
-    ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
-    ax[1].set_xticklabels(t_plot[::10])
-
-    ax[2].plot(actions[trial], label='actions')
-    ax[2].plot(gt[trial], '--', label='gt')
-    ax[2].legend()
-    ax[2].set_title('Actions')
-    ax[2].set_xlabel('Time (ms)')
-    ax[2].set_ylabel('Action')
-    # change the xticks to show time in ms
-
-    plt.tight_layout()
 
 
 def analysis_activity_by_condition(activity, info, config,
@@ -202,50 +162,43 @@ def equalize_arrays(array_list):
             pad_width = ((max_shape - arr.shape[0], 0), (0, 0))
         elif len(arr.shape) == 3:
             pad_width = ((max_shape - arr.shape[0], 0), (0, 0), (0, 0))
-        padded_array = np.pad(arr, pad_width, mode='constant', constant_values=0)
+        padded_array = np.pad(arr, pad_width, mode='constant',
+                              constant_values=0)
         padded_arrays.append(padded_array)
 
     return padded_arrays
 
 
-# --- MAIN
-if __name__ == '__main__':
-    plt.close('all')
-    # Set up config:
-    training_kwargs = {'dt': 100,
-                       'lr': 1e-2,
-                       'n_epochs': 2000,  # 2000
-                       'batch_size': 16,
-                       'seq_len': 100,
-                       'TASK': TASK}
+def run_agent_in_environment(num_steps, env):
+    """
+    Run the agent in the environment for a specified number of steps.
 
-    env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8]),
-                  'blk_dur': 50}
+    Parameters
+    ----------
+    env :
+        The environment in which the agent interacts.
+    num_steps : int
+        The number of steps to run the agent in the environment
 
-    # call function to sample
-    dataset, env = get_dataset(
-        TASK=TASK, env_kwargs=env_kwargs, training_kwargs=training_kwargs)
-
-    inputs, labels = dataset()
-    print('inputs shape:', inputs.shape)
-    print('labels shape:', labels.shape)
-    print('Example inputs:')
-    print('Fixation     Stimulus Left Stimulus Right')
-    print(inputs[:20, 0])
-    print('Example labels:')
-    print(labels[:20, 0])
-
-    num_steps = 400
+    Returns
+    -------
+    data : dict
+        A dictionary containing recorded data:
+            -'ob': Observations received from the environment.
+            -'actions': Actions taken by the agent.
+            -'gt': Ground truth information
+    perf : list
+        A list containing information on performance
+    rew_mat: ----------
+    """
     inputs = []
     actions = []
     gt = []
     perf = []
     rew_mat = []
-    trial_count = 0
+    trial_count = 0 
     for stp in range(int(num_steps)):
         action = env.action_space.sample()
-        # You can also try to set the action to one constant value,
-        # e.g. action = 1
         ob, rew, done, info = env.step(action)
         inputs.append(ob)
         actions.append(action)
@@ -261,7 +214,25 @@ if __name__ == '__main__':
 
     data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt}
-    # Plot
+    return perf, rew_mat, data
+
+
+def show_task(env_kwargs, data, num_steps):
+    """
+    Parameters
+    ----------
+    env_kwargs : TYPE
+        DESCRIPTION.
+    data : TYPE
+        DESCRIPTION.
+    num_steps : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
     f, ax = plt.subplots(ncols=1, nrows=4, figsize=(8, 4),
                          dpi=150, sharex=True)
 
@@ -282,35 +253,30 @@ if __name__ == '__main__':
     ax[3].set_ylabel('Reward')
     ax[3].set_xlabel('Time (ms)')
 
-    num_neurons = 64
 
-    net_kwargs = {'hidden_size': num_neurons,
-                  'action_size': env.action_space.n,
-                  'input_size': env.observation_space.n}
+def train_network(num_epochs, net, optimizer, criterion, env, DEVICE, TASK):
+    """
+    Train the neural network.
 
-    net = Net(input_size=env.observation_space.n,
-              hidden_size=net_kwargs['hidden_size'],
-              output_size=env.action_space.n)
+    Parameters
+    ----------
+    num_epochs : int
+        The number of epochs for training.
+    net:
+        The neural network model to be trained.
+    optimizer:
+        The optimizer used for updating the model paramenters.
+    criterion:
+        The loss function used for computing the loss.
+    env:
 
-    # Move network to the device (CPU or GPU)
-    net = net.to(DEVICE)
 
-    criterion = nn.CrossEntropyLoss()
+    Returns
+    -------
+    None.
 
-    # Define optimizer
-    optimizer = torch.optim.Adam(net.parameters(), lr=training_kwargs['lr'])
-
-    training_kwargs['env_kwargs'] = env_kwargs
-    training_kwargs['net_kwargs'] = net_kwargs
-
-    # Save config
-    # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
-    #     json.dump(training_kwargs, f)
-    # TODO: move training to a new function
+    """
     print('Training task ', TASK)
-
-    num_epochs = training_kwargs['n_epochs']
-
     running_loss = 0.0
 
     for i in range(num_epochs):
@@ -353,20 +319,31 @@ if __name__ == '__main__':
 
             # save current state of network's parameters
             torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
+    print('Finished training')
 
-    print('Finished Training')
 
-    # load configuration file - we might have run the training on the cloud
-    # and might now open the results locally
-    # with open(get_modelpath(TASK) / 'config.json') as f:
-    #     config = json.load(f)
+def evaluate_network(net, env, num_trials, DEVICE):
+    """
+    Evaluate the neural network on the specified environment.
 
-    # Environment
-    env = gym.make(TASK, **training_kwargs['env_kwargs'])
-    env.reset(no_step=True)  # this is to initialize the environment
+    Parameters
+    ----------
+    net :
+        The neural network model to be evaluated.
+    env :
+        The environment in which the network will be evaluated.
+    num_trials : int
+        The number of trials for evaluation.
+    DEVICE :
+        The device to be used for computation.
 
+    Returns
+    -------
+    None.
+
+    """
     # Since we will not train the network anymore, we can turn off the gradient
-    # computation. The most commun way to do this is to use the context manager
+    # computation. The most common way to do this is to use the context manager
     # torch.no_grad() as follows:
     with torch.no_grad():
         net = Net(input_size=training_kwargs['net_kwargs']['input_size'],
@@ -378,9 +355,6 @@ if __name__ == '__main__':
         # load the trained network's weights from the saved file
         net.load_state_dict(torch.load(get_modelpath(TASK) / 'net.pth'))
 
-        # how many trials to run
-        num_trial = 1000
-
         # empty lists / dataframe to store activity, choices, and trial
         # inforation
         activity = list()
@@ -388,7 +362,7 @@ if __name__ == '__main__':
         actions = list()
         gt = list()
         info = pd.DataFrame()
-        for i in range(num_trial):
+        for i in range(num_trials):
             # create new trial
             env.new_trial()
             # read out the inputs in that trial
@@ -405,8 +379,8 @@ if __name__ == '__main__':
             action_pred = action_pred.detach().numpy()
 
             # INSTRUCTION 8: get the network's choice.
-            # Take into account the shape of action_pred. Remember that the network
-            # makes a prediction for each time step in the trial.
+            # Take into account the shape of action_pred. Remember that the
+            # network makes a prediction for each time step in the trial.
             # Which is the prediction we really care about when evaluating the
             # network's performance?
             actions_trial = np.argmax(action_pred[:, 0], axis=1)
@@ -433,44 +407,155 @@ if __name__ == '__main__':
 
             # Log the inputs (or observations) received by the network
             obs.append(env.ob)
+        obs = np.array(equalize_arrays(obs))
+        activity = np.array(equalize_arrays(activity))
+        actions = np.array(equalize_arrays(actions))
+        gt = np.array(equalize_arrays(gt))
 
-    print('Average performance', np.mean(info['correct']))
-    # print stats of the activity: max, min, mean, std
+        print('Average performance', np.mean(info['correct']))
+        # print stats of the activity: max, min, mean, std
+        print('Activity stats:')
+        print('Max: ' + str(np.max(activity)) +
+              ', Min: ' + str(np.min(activity)) +
+              ', Mean: ' + str(np.mean(activity)) +
+              ', Std: ' + str(np.std(activity)) +
+              ', Shape: ' + str(activity.shape))
 
-    # add zeros at the beggining of the arrays to make them equal size
-    # TODO: move to a function
-    obs = np.array(equalize_arrays(obs))
-    activity = np.array(equalize_arrays(activity))
-    actions = np.array(equalize_arrays(actions))
-    gt = np.array(equalize_arrays(gt))
+        # print the variables in the info dataframe
+        print('Info dataframe:')
+        print(info.head())
+        return activity, obs, actions, gt, info
 
-    # TODO: pad actions
 
-    print('Activity stats:')
-    print('Max: ' + str(np.max(activity)) +
-          ', Min: ' + str(np.min(activity)) +
-          ', Mean: ' + str(np.mean(activity)) +
-          ', Std: ' + str(np.std(activity)) +
-          ', Shape: ' + str(activity.shape))
-
-    # print the variables in the info dataframe
-    print('Info dataframe:')
-    print(info.head())
-
-    # plot trial
+def preprocess_activity(activity):
     silent_idx = np.where(activity.sum(axis=(0, 1)) == 0)[0]
-
     print('fraction of silent neurons:', len(silent_idx)/activity.shape[-1])
-    # INSRTUCTION 12: plot the activity for one trial, but now excluding the
+
+    # activity for one trial, but now excluding the
     # silent neurons
     clean_activity = activity[:, :, np.delete(
         np.arange(activity.shape[-1]), silent_idx)]
 
     # min_max scaling
     minmax_activity = np.array(
-        [neuron-neuron.min() for neuron in clean_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
+        [neuron-neuron.min() for neuron in
+         clean_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
     minmax_activity = np.array(
-        [neuron/neuron.max() for neuron in minmax_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
+        [neuron/neuron.max() for neuron in
+         minmax_activity.transpose(2, 0, 1)]).transpose(1, 2, 0)
+    return minmax_activity
 
-    plot_activity(activity=minmax_activity, obs=obs, actions=actions, gt=gt,
-                  config=training_kwargs, trial=0)
+
+def plot_activity(activity, obs, actions, gt, config, trial):
+
+    # Load and preprocess results
+    f, ax = plt.subplots(figsize=(5, 4), nrows=3, dpi=150)
+
+    # time in ms
+    t_plot = np.arange(activity.shape[1]) * config['dt']
+
+    # plot the observations for one trial. Note that we will visualize the
+    # inputs as a matrix instead of traces, as we have done before.
+    ax[0].plot(obs[trial])
+    ax[0].set_title('Observations')
+    ax[0].set_ylabel('Stimuli')
+    # change the xticks to show time in ms
+    # INSTRUCTION 11: plot the activity for one trial
+    ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
+    ax[1].set_title('Activity')
+    ax[1].set_ylabel('Neurons')
+    # plt.colorbar(im, ax=ax[1])
+    # change the xticks to show time in ms
+    ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
+    ax[1].set_xticklabels(t_plot[::10])
+
+    ax[2].plot(actions[trial], label='actions')
+    ax[2].plot(gt[trial], '--', label='gt')
+    ax[2].legend()
+    ax[2].set_title('Actions')
+    ax[2].set_xlabel('Time (ms)')
+    ax[2].set_ylabel('Action')
+    # change the xticks to show time in ms
+
+    plt.tight_layout()
+
+
+# --- MAIN
+if __name__ == '__main__':
+    plt.close('all')
+    # Set up config:
+    training_kwargs = {'dt': 100,
+                       'lr': 1e-2,
+                       'n_epochs': 2000,
+                       'batch_size': 16,
+                       'seq_len': 100,
+                       'TASK': TASK}
+
+    env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8]),
+                  'blk_dur': 50}
+
+    # call function to sample
+    dataset, env = get_dataset(
+        TASK=TASK, env_kwargs=env_kwargs, training_kwargs=training_kwargs)
+
+    inputs, labels = dataset()
+    print('inputs shape:', inputs.shape)
+    print('labels shape:', labels.shape)
+    print('Example inputs:')
+    print('Fixation     Stimulus Left Stimulus Right')
+    print(inputs[:20, 0])
+    print('Example labels:')
+    print(labels[:20, 0])
+
+    num_steps = 400
+
+    perf, rew_mat, data = run_agent_in_environment(num_steps=num_steps,
+                                                   env=env)
+
+    show_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
+
+    num_neurons = 64
+
+    net_kwargs = {'hidden_size': num_neurons,
+                  'action_size': env.action_space.n,
+                  'input_size': env.observation_space.n}
+
+    net = Net(input_size=env.observation_space.n,
+              hidden_size=net_kwargs['hidden_size'],
+              output_size=env.action_space.n)
+
+    # Move network to the device (CPU or GPU)
+    net = net.to(DEVICE)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=training_kwargs['lr'])
+
+    training_kwargs['env_kwargs'] = env_kwargs
+    training_kwargs['net_kwargs'] = net_kwargs
+
+    # Save config
+    # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
+    #     json.dump(training_kwargs, f)
+
+    num_epochs = training_kwargs['n_epochs']
+
+    train_network(num_epochs=num_epochs, net=net, optimizer=optimizer,
+                  criterion=criterion, env=env, DEVICE=DEVICE,
+                  TASK=TASK)
+
+    # load configuration file - we might have run the training on the cloud
+    # and might now open the results locally
+    # with open(get_modelpath(TASK) / 'config.json') as f:
+    #     config = json.load(f)
+
+    # Environment
+    env = gym.make(TASK, **training_kwargs['env_kwargs'])
+    env.reset(no_step=True)  # this is to initialize the environment
+
+    num_trials = 1000
+    activity, obs, actions, gt, info = evaluate_network(net=net, env=env,
+                                                        num_trials=num_trials,
+                                                        DEVICE=DEVICE)
+
+    clean_minmax_activity = preprocess_activity(activity)
+    plot_activity(activity=clean_minmax_activity, obs=obs, actions=actions,
+                  gt=gt, config=training_kwargs, trial=0)
