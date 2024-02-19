@@ -864,7 +864,7 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
         #                **task_kwargs)()
         env = make_env(env_id=task, rank=0, seed=random.randint(
             1, 4098), wrapps=wraps_sl, **task_kwargs)()
-        obs_size = 1+1+1  # 1+1#1+n_ch+1#
+        obs_size = 1
         act_size = 1  # 1+n_ch
         # Instantiate the network and print information
         hidden_size = n_lstm
@@ -930,7 +930,7 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
         act_thred = 0.0  # 0.2#0#
         train_slot = 1
         # start and pre start
-        numround = 2  # 6000#6000#
+        numround = 2  # TODO: ask Yuxiu what is this
         # max_trial = 7 ### max trial length
         # max_trial = 21 ### max trial length
         max_trial = 20  # max trial length
