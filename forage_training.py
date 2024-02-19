@@ -196,9 +196,11 @@ def run_agent_in_environment(num_steps, env):
     gt = []
     perf = []
     rew_mat = []
-    trial_count = 0 
     for stp in range(int(num_steps)):
-        action = env.action_space.sample()
+        if model is None:
+            action = env.action_space.sample()
+        else:
+            action = model(ob) # TODO: check ob shape
         ob, rew, done, info = env.step(action)
         inputs.append(ob)
         actions.append(action)
@@ -535,12 +537,16 @@ if __name__ == '__main__':
     # Save config
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(training_kwargs, f)
-
+    num_steps_exp = 1000
+    num_periods = 100
     num_epochs = training_kwargs['n_epochs']
+    for i in range(num_periods):
+        data = run_agent_in_environment(num_steps=num_steps, env=env, model=model,
+                                        num_steps_exp=num_steps_exp)
 
-    train_network(num_epochs=num_epochs, net=net, optimizer=optimizer,
-                  criterion=criterion, env=env, DEVICE=DEVICE,
-                  TASK=TASK)
+        model = train_network(num_epochs=num_epochs, data=data, net=net,
+                              optimizer=optimizer, criterion=criterion, env=env,
+                              DEVICE=DEVICE, TASK=TASK)
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
