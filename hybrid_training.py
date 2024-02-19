@@ -899,9 +899,8 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
         b = b.detach().numpy()
         wi_full, wo_full = wi_full.detach().numpy(), wo_full.detach().numpy()
 
-        # print('vanilla rnn-- wi_full:', np.shape(wi_full), ', m:', np.shape(m),
-        #       ', n:', np.shape(n), ', b:', np.shape(b),
-        #       ', wo_full:', np.shape(wo_full))
+        print('vanilla rnn-- wi_full:', np.shape(wi_full), ', b:', np.shape(b),
+              ', wo_full:', np.shape(wo_full))
 
         # recording training dataset
         sv_values = 1
@@ -921,28 +920,16 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
             info_vals = {}
 
         ob = env.reset()
-        # To make sure that we start from the fixation time period of the trial.
-        ob, rew, done, info = env.step(1)
-        pre_start = ob[0]
-        for i in range(rollout*2):
-            ob, rew, done, info = env.step(1)
-            start = ob[0]
-            if pre_start == 0 and start == 1:
-                print('start new trial')
-                break
-            pre_start = start
-
+        if ~isinstance(ob, np.ndarray):
+            ob = np.array([ob])
         ob_cum_temp = ob
-
         prev_act = -1
         prev_p = -1
         trial_count = 0
         perfs = []
-
         act_thred = 0.0  # 0.2#0#
         train_slot = 1
         # start and pre start
-
         numround = 2  # 6000#6000#
         # max_trial = 7 ### max trial length
         # max_trial = 21 ### max trial length
@@ -974,9 +961,6 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
                 all_zeros = not ob.copy()[0, :].any()
                 if all_zeros:
                     batch_trial -= 1
-                stim = np.zeros((1, ob.shape[1]-1))
-                stim[0, 0], stim[0, 2] = ob[0, 0], ob[0, 3]
-                stim[0, 1] = ob[0, 1]-ob[0, 2]
                 # stim = np.zeros((1,ob.shape[1]))
                 # stim = ob.copy()
 
@@ -988,7 +972,7 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
                 #     scratch_model_lr(stim[:,1:],noise_std,rate, hidden,
                 #                      wi_full,m,n,b,wo_full,alpha_net,hidden_size)
                 rate, state, action_p =\
-                    scratch_model(xstim=stim[:, :], noise_std=noise_std, r=rate,
+                    scratch_model(xstim=ob, noise_std=noise_std, r=rate,
                                   h=hidden, wi=wi_full, wrec=wrec, b=b, wo=wo_full,
                                   alpha=alpha_net, hs=hidden_size)
                 # one-dimensional output
@@ -1000,6 +984,9 @@ def run(task, task_kwargs, wrappers_kwargs, expl_params,
                     action = 0
                 # now ob is the next stimulus, rew done info are for current
                 ob, rew, done, info = env.step(action)
+                if ~isinstance(ob, np.ndarray):
+                    ob = np.array([ob])
+
                 if train_slot:
                     # generate dataset
                     if (len(dataset_['stimulus']) == 0):
