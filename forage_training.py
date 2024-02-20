@@ -243,11 +243,36 @@ def build_dataset(data):
     Returns
     -------
     dataset = {'inputs':seq_len x batch_size x (num_inputs+1+1),
-           'labels': seq_len x batch_size}
+            'labels': seq_len x batch_size}
     extra dimensions in inputs correspond to previous action and previous reward
+    
     """
+    ob_array = data['ob']
+    # reshape
+    ob_array = ob_array.reshape(100, 16)
+
+    rew_array = data['rew_mat']
+    # insert zero at the beginning and remove last element
+    rew_array = np.insert(rew_array, 0, 0)[:-1]
+    # reshape
+    rew_array = rew_array.reshape(100, 16)
+
+    action_array = data['actions']
+    # insert zero at the beginning and remove last element
+    action_array = np.insert(action_array, 0, 0)[:-1]
+    # reshape
+    action_array = action_array.reshape(100, 16)
+    # create matrix
+    inputs = np.stack((ob_array, rew_array, action_array), axis=2)
+
+    labels = np.array(data['gt'])
+    # reshape
+    labels = labels.reshape(100, 16)
+
+    dataset = {'inputs': inputs, 'labels': labels}
 
     return dataset
+
 
 def show_task(env_kwargs, data, num_steps):
     """
