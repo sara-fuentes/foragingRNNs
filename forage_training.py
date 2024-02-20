@@ -245,23 +245,28 @@ def build_dataset(data):
     dataset = {'inputs':seq_len x batch_size x (num_inputs+1+1),
             'labels': seq_len x batch_size}
     extra dimensions in inputs correspond to previous action and previous reward
-    
+
     """
     ob_array = data['ob']
     # reshape
     ob_array = ob_array.reshape(100, 16)
 
     rew_array = data['rew_mat']
-    # insert zero at the beginning and remove last element
-    rew_array = np.insert(rew_array, 0, 0)[:-1]
     # reshape
-    rew_array = rew_array.reshape(100, 16)
+    rew_array = np.array(rew_array).reshape(100, 16)
+    # insert zero at the beginning of each row
+    rew_array = np.insert(rew_array, 0, 0, axis=1)
+    # remove the last element of each row
+    rew_array = rew_array[:, :-1]
 
     action_array = data['actions']
-    # insert zero at the beginning and remove last element
-    action_array = np.insert(action_array, 0, 0)[:-1]
     # reshape
-    action_array = action_array.reshape(100, 16)
+    action_array = np.array(action_array).reshape(100, 16)
+    # insert a zero at the beginning of each row
+    action_array = np.insert(action_array, 0, 0, axis=1)
+    # remove the last element of each row
+    action_array = action_array[:, :-1]
+
     # create matrix
     inputs = np.stack((ob_array, rew_array, action_array), axis=2)
 
