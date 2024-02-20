@@ -187,9 +187,8 @@ def run_agent_in_environment(num_steps_exp, env, model=None):
             -'ob': Observations received from the environment.
             -'actions': Actions taken by the agent.
             -'gt': Ground truth information
-    perf : list
-        A list containing information on performance
-    rew_mat: ----------
+            -perf :Information on performance
+            -rew_mat: ----------
     """
     inputs = []
     actions = []
@@ -213,9 +212,9 @@ def run_agent_in_environment(num_steps_exp, env, model=None):
             perf.append(info['performance'])
         else:
             perf.append(0)
-    # TODO: plug here perf, rew_mat, 
     data = {'ob': np.array(inputs).astype(float),
-            'actions': actions, 'gt': gt}
+            'actions': actions, 'gt': gt, 'perf': perf,
+            'rew_mat': rew_mat}
     return data
 
 
@@ -341,7 +340,7 @@ def evaluate_network(net, env, num_trials, DEVICE):
 
     Returns
     -------
-    None.
+    ------------------.
 
     """
     # Since we will not train the network anymore, we can turn off the gradient
@@ -537,16 +536,30 @@ if __name__ == '__main__':
     # Save config
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(training_kwargs, f)
+    
     num_steps_exp = 1000
     num_periods = 100
     num_epochs = training_kwargs['n_epochs']
+    
+    observations_rl = []
+    rewards_rl = []
+    actions_rl = []
     for i in range(num_periods):
-        data = run_agent_in_environment(num_steps=num_steps, env=env, model=model,
+        data = run_agent_in_environment(env=env, model=model,
                                         num_steps_exp=num_steps_exp)
-        # TODO: build dataset with ob, reward
-        model = train_network(num_epochs=num_epochs, data=data, net=net,
-                              optimizer=optimizer, criterion=criterion, env=env,
-                              DEVICE=DEVICE, TASK=TASK, model=model)
+        observations_rl.append(data['ob'])
+        rewards_rl.append(data['rew_mat'])
+        actions_rl.append(data['actions'])
+    
+    # Build dataset with ob, reward and action after RL:
+    dataset_rl = {'observations': np.concatenate(observations_rl),
+                  'rewards': np.concatenate(rewards_rl),
+                  'actions': np.concatenate(actions_rl)}
+    
+    # Train model with RL data
+    train_network(num_epochs=num_epochs, data=data, net=net,
+                  optimizer=optimizer, criterion=criterion, env=env,
+                  DEVICE=DEVICE, TASK=TASK, model=model)
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
@@ -558,6 +571,7 @@ if __name__ == '__main__':
     env.reset(no_step=True)  # this is to initialize the environment
 
     num_trials = 1000
+    # evaluate network
     activity, obs, actions, gt, info = evaluate_network(net=net, env=env,
                                                         num_trials=num_trials,
                                                         DEVICE=DEVICE)
