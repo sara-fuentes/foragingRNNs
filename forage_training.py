@@ -35,6 +35,13 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 # name of the task on the neurogym library
 TASK = 'ForagingBlocks-v0'
 
+TRAINING_KWARGS = {'dt': 100,
+                   'lr': 1e-2,
+                   'n_epochs': 2000,
+                   'batch_size': 16,
+                   'seq_len': 100,
+                   'TASK': TASK}
+
 
 def get_modelpath(TASK):
     # Make a local file directories
@@ -45,14 +52,13 @@ def get_modelpath(TASK):
     return path
 
 
-def get_dataset(TASK, env_kwargs, training_kwargs):
+def get_dataset(TASK, env_kwargs):
     """
     Create neurogym dataset and environment.
 
     args:
         TASK (str): name of the task on the neurogym library
         env_kwargs (dict): task parameters
-        training_kwargs (dict): training parameters
 
     returns:
         dataset (neurogym.Dataset): dataset object from which we can sample
@@ -63,8 +69,8 @@ def get_dataset(TASK, env_kwargs, training_kwargs):
     # Make supervised dataset using neurogym's Dataset class
     dataset = ngym_f.Dataset(TASK,
                              env_kwargs=env_kwargs,
-                             batch_size=training_kwargs['batch_size'],
-                             seq_len=training_kwargs['seq_len'])
+                             batch_size=TRAINING_KWARGS['batch_size'],
+                             seq_len=TRAINING_KWARGS['seq_len'])
     env = dataset.env
 
     return dataset, env
@@ -195,11 +201,19 @@ def run_agent_in_environment(num_steps_exp, env, model=None):
     gt = []
     perf = []
     rew_mat = []
+    ob = env.reset()
     for stp in range(int(num_steps_exp)):
         if model is None:
             action = env.action_space.sample()
         else:
-            action = model(ob) # TODO: check ob shape
+            if ~isinstance(ob, np.ndarray):
+                ob = np.array([ob])
+            ob = ob[:, np.newaxis, np.newaxis]
+            ob = torch.from_numpy(ob).type(torch.float)
+            action, _ = net(ob)
+            action = torch.nn.functional.softmax(action, dim=2)
+            action = action.detach().numpy()
+            action = np.argmax(action[0, 0, :])
         ob, rew, done, info = env.step(action)
         inputs.append(ob)
         actions.append(action)
@@ -217,6 +231,23 @@ def run_agent_in_environment(num_steps_exp, env, model=None):
             'rew_mat': rew_mat}
     return data
 
+
+def build_dataset(data):
+    """
+
+    Parameters
+    ----------
+    data : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    dataset = {'inputs':seq_len x batch_size x (num_inputs+1+1),
+           'labels': seq_len x batch_size}
+    extra dimensions in inputs correspond to previous action and previous reward
+    """
+
+    return dataset
 
 def show_task(env_kwargs, data, num_steps):
     """
@@ -244,18 +275,19 @@ def show_task(env_kwargs, data, num_steps):
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
                data['gt'], label='Targets', color='k')
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['actions'], label='Choice', linestyle='--')
+               data['actions'], label='Choice', linestyle='--', marker='+')
     ax[1].set_ylabel('Actions / Targets')
     ax[1].legend()
-    ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], perf, label='perf')
+    ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['perf'],
+               label='perf')
     ax[2].set_ylabel('Performance')
-    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], rew_mat,
+    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['rew_mat'],
                label='perf')
     ax[3].set_ylabel('Reward')
     ax[3].set_xlabel('Time (ms)')
 
 
-def train_network(num_epochs, net, optimizer, criterion, env, DEVICE, TASK):
+def train_network(num_epochs, net, optimizer, criterion, env):
     """
     Train the neural network.
 
@@ -323,7 +355,7 @@ def train_network(num_epochs, net, optimizer, criterion, env, DEVICE, TASK):
     print('Finished training')
 
 
-def evaluate_network(net, env, num_trials, DEVICE):
+def evaluate_network(net, env, num_trials):
     """
     Evaluate the neural network on the specified environment.
 
@@ -347,9 +379,9 @@ def evaluate_network(net, env, num_trials, DEVICE):
     # computation. The most common way to do this is to use the context manager
     # torch.no_grad() as follows:
     with torch.no_grad():
-        net = Net(input_size=training_kwargs['net_kwargs']['input_size'],
-                  hidden_size=training_kwargs['net_kwargs']['hidden_size'],
-                  output_size=training_kwargs['net_kwargs']['action_size'])
+        net = Net(input_size=TRAINING_KWARGS['net_kwargs']['input_size'],
+                  hidden_size=TRAINING_KWARGS['net_kwargs']['hidden_size'],
+                  output_size=TRAINING_KWARGS['net_kwargs']['action_size'])
 
         net = net.to(DEVICE)  # pass to GPU for running forwards steps
 
@@ -485,19 +517,13 @@ def plot_activity(activity, obs, actions, gt, config, trial):
 if __name__ == '__main__':
     plt.close('all')
     # Set up config:
-    training_kwargs = {'dt': 100,
-                       'lr': 1e-2,
-                       'n_epochs': 2000,
-                       'batch_size': 16,
-                       'seq_len': 100,
-                       'TASK': TASK}
 
-    env_kwargs = {'dt': training_kwargs['dt'], 'probs': np.array([0.2, 0.8]),
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0.2, 0.8]),
                   'blk_dur': 50}
 
     # call function to sample
     dataset, env = get_dataset(
-        TASK=TASK, env_kwargs=env_kwargs, training_kwargs=training_kwargs)
+        TASK=TASK, env_kwargs=env_kwargs)
 
     inputs, labels = dataset()
     print('inputs shape:', inputs.shape)
@@ -510,8 +536,7 @@ if __name__ == '__main__':
 
     num_steps = 400
 
-    perf, rew_mat, data = run_agent_in_environment(num_steps=num_steps,
-                                                   env=env)
+    data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
 
     show_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
 
@@ -528,38 +553,29 @@ if __name__ == '__main__':
     # Move network to the device (CPU or GPU)
     net = net.to(DEVICE)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=training_kwargs['lr'])
+    optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
 
-    training_kwargs['env_kwargs'] = env_kwargs
-    training_kwargs['net_kwargs'] = net_kwargs
+    TRAINING_KWARGS['env_kwargs'] = env_kwargs
+    TRAINING_KWARGS['net_kwargs'] = net_kwargs
 
     # Save config
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
-    #     json.dump(training_kwargs, f)
-    
-    num_steps_exp = 1000
+    #     json.dump(TRAINING_KWARGS, f)
+
+    num_steps_exp = TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     num_periods = 100
-    num_epochs = training_kwargs['n_epochs']
-    
-    observations_rl = []
-    rewards_rl = []
-    actions_rl = []
+    num_epochs = TRAINING_KWARGS['n_epochs']
+
     for i in range(num_periods):
-        data = run_agent_in_environment(env=env, model=model,
+        # dataset = {'inputs':seq_len x batch_size x num_inputs,
+        #            'labels': seq_len x batch_size}
+        data = run_agent_in_environment(env=env, model=net,
                                         num_steps_exp=num_steps_exp)
-        observations_rl.append(data['ob'])
-        rewards_rl.append(data['rew_mat'])
-        actions_rl.append(data['actions'])
-    
-    # Build dataset with ob, reward and action after RL:
-    dataset_rl = {'observations': np.concatenate(observations_rl),
-                  'rewards': np.concatenate(rewards_rl),
-                  'actions': np.concatenate(actions_rl)}
-    
-    # Train model with RL data
-    train_network(num_epochs=num_epochs, data=data, net=net,
-                  optimizer=optimizer, criterion=criterion, env=env,
-                  DEVICE=DEVICE, TASK=TASK, model=model)
+        dataset = build_dataset(data)
+        # Train model with RL data
+        train_network(num_epochs=num_epochs, data=data, net=net,
+                      optimizer=optimizer, criterion=criterion, env=env,
+                      model=net)
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
@@ -567,7 +583,7 @@ if __name__ == '__main__':
     #     config = json.load(f)
 
     # Environment
-    env = gym.make(TASK, **training_kwargs['env_kwargs'])
+    env = gym.make(TASK, **TRAINING_KWARGS['env_kwargs'])
     env.reset(no_step=True)  # this is to initialize the environment
 
     num_trials = 1000
@@ -578,4 +594,4 @@ if __name__ == '__main__':
 
     clean_minmax_activity = preprocess_activity(activity)
     plot_activity(activity=clean_minmax_activity, obs=obs, actions=actions,
-                  gt=gt, config=training_kwargs, trial=0)
+                  gt=gt, trial=0)
