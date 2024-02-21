@@ -37,7 +37,7 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 2000,
+                   'n_epochs': 20,
                    'batch_size': 16,
                    'seq_len': 100,
                    'TASK': TASK}
@@ -82,7 +82,6 @@ class Net(nn.Module):
 
         # INSTRUCTION 1: build a recurrent neural network with a single
         # recurrent layer and rectified linear units
-
         self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu')
         self.linear = nn.Linear(hidden_size, output_size)
 
@@ -175,7 +174,7 @@ def equalize_arrays(array_list):
     return padded_arrays
 
 
-def run_agent_in_environment(num_steps_exp, env, model=None):
+def run_agent_in_environment(num_steps_exp, env, net=None):
     """
     Run the agent in the environment for a specified number of steps.
 
@@ -201,16 +200,19 @@ def run_agent_in_environment(num_steps_exp, env, model=None):
     gt = []
     perf = []
     rew_mat = []
+    rew = 0
+    action = 0
     ob = env.reset()
     for stp in range(int(num_steps_exp)):
-        if model is None:
+        if net is None:
             action = env.action_space.sample()
         else:
             if ~isinstance(ob, np.ndarray):
                 ob = np.array([ob])
-            ob = ob[:, np.newaxis, np.newaxis]
+            ob = np.array([ob, rew, action], dtype=np.int64)
+            ob = ob[np.newaxis, np.newaxis, :]
             ob = torch.from_numpy(ob).type(torch.float)
-            action, _ = net(ob)
+            action, _ = net(ob)  # HINT: action, hidden = net(ob, hidden)
             action = torch.nn.functional.softmax(action, dim=2)
             action = action.detach().numpy()
             action = np.argmax(action[0, 0, :])
@@ -242,37 +244,54 @@ def build_dataset(data):
 
     Returns
     -------
-    dataset = {'inputs':seq_len x batch_size x (num_inputs+1+1),
+    dataset = {'inputs':n_epochs x seq_len x batch_size x (num_inputs+1+1),
             'labels': seq_len x batch_size}
     extra dimensions in inputs correspond to previous action and previous reward
 
     """
+    TRAINING_KWARGS = {'dt': 100,
+                       'lr': 1e-2,
+                       'n_epochs': 20,
+                       'batch_size': 16,
+                       'seq_len': 100,
+                       'TASK': TASK}
+    # OBSERVATION
     ob_array = data['ob']
     # reshape
-    ob_array = ob_array.reshape(100, 16)
-
+    ob_array = ob_array.reshape(TRAINING_KWARGS['n_epochs'],
+                                TRAINING_KWARGS['seq_len'],
+                                TRAINING_KWARGS['batch_size'])
+    # REWARD
     rew_array = data['rew_mat']
-    # reshape
-    rew_array = np.array(rew_array).reshape(100, 16)
     # insert zero at the beginning of each row
-    rew_array = np.insert(rew_array, 0, 0, axis=1)
+    rew_array = np.insert(rew_array, 0, 0)
     # remove the last element of each row
-    rew_array = rew_array[:, :-1]
+    rew_array = rew_array[:-1]
 
-    action_array = data['actions']
     # reshape
-    action_array = np.array(action_array).reshape(100, 16)
+    rew_array = np.array(rew_array).reshape(TRAINING_KWARGS['n_epochs'],
+                                            TRAINING_KWARGS['seq_len'],
+                                            TRAINING_KWARGS['batch_size'])
+    # ACTION
+    action_array = data['actions']
     # insert a zero at the beginning of each row
-    action_array = np.insert(action_array, 0, 0, axis=1)
+    action_array = np.insert(action_array, 0, 0)
     # remove the last element of each row
-    action_array = action_array[:, :-1]
+    action_array = action_array[:-1]
+
+    # reshape
+    action_array = np.array(action_array).reshape(TRAINING_KWARGS['n_epochs'],
+                                                  TRAINING_KWARGS['seq_len'],
+                                                  TRAINING_KWARGS['batch_size'])
 
     # create matrix
-    inputs = np.stack((ob_array, rew_array, action_array), axis=2)
+    inputs = np.stack((ob_array, rew_array, action_array), axis=3)
 
     labels = np.array(data['gt'])
     # reshape
-    labels = labels.reshape(100, 16)
+    labels = labels.reshape(TRAINING_KWARGS['n_epochs'],
+                            TRAINING_KWARGS['seq_len'],
+                            TRAINING_KWARGS['batch_size'])
 
     dataset = {'inputs': inputs, 'labels': labels}
 
@@ -317,7 +336,7 @@ def show_task(env_kwargs, data, num_steps):
     ax[3].set_xlabel('Time (ms)')
 
 
-def train_network(num_epochs, net, optimizer, criterion, env):
+def train_network(num_epochs, net, optimizer, criterion, env, dataset):
     """
     Train the neural network.
 
@@ -344,8 +363,9 @@ def train_network(num_epochs, net, optimizer, criterion, env):
 
     for i in range(num_epochs):
         # get inputs and labels and pass them to the GPU
-        inputs, labels = dataset()
-        inputs = np.expand_dims(inputs, axis=2)
+        inputs = dataset['inputs'][i]
+        labels = dataset['labels'][i]
+        # inputs = np.expand_dims(inputs, axis=2)
         inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
         labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
         # print shapes of inputs and labels
@@ -382,7 +402,6 @@ def train_network(num_epochs, net, optimizer, criterion, env):
 
             # save current state of network's parameters
             torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
-    print('Finished training')
 
 
 def evaluate_network(net, env, num_trials):
@@ -574,9 +593,9 @@ if __name__ == '__main__':
 
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
-                  'input_size': env.observation_space.n}
+                  'input_size': env.observation_space.n+1+1}
 
-    net = Net(input_size=env.observation_space.n,
+    net = Net(input_size=net_kwargs['input_size'],
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n)
 
@@ -592,20 +611,23 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_steps_exp = TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     num_periods = 100
     num_epochs = TRAINING_KWARGS['n_epochs']
-
+    num_steps_exp =\
+        num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
+    debug = True
     for i in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
         #            'labels': seq_len x batch_size}
-        data = run_agent_in_environment(env=env, model=net,
+        data = run_agent_in_environment(env=env, net=net,
                                         num_steps_exp=num_steps_exp)
+        if debug:
+            show_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
+
         dataset = build_dataset(data)
         # Train model with RL data
-        train_network(num_epochs=num_epochs, data=data, net=net,
-                      optimizer=optimizer, criterion=criterion, env=env,
-                      model=net)
+        train_network(num_epochs=num_epochs, dataset=dataset, net=net,
+                      optimizer=optimizer, criterion=criterion, env=env)
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
