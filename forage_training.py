@@ -293,12 +293,17 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         else:
             perf.append(0)
             
-    print('last step: ', step)
-
+    print('------------')            
+    mean_perf = np.mean(perf)
+    print('mean performance: ', mean_perf)
+    mean_rew = np.mean(rew_mat)
+    print('mean reward: ', mean_rew)
+    print('------------')
     data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
             'rew_mat': rew_mat}
     return data
+
 
 def build_dataset(data):
     """
@@ -424,7 +429,7 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
     None.
 
     """
-    print('Training task ', TASK)
+    # print('Training task ', TASK)
     running_loss = 0.0
 
     for i in range(num_epochs):
@@ -435,7 +440,7 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
         inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
         labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
         # print shapes of inputs and labels
-        if i == 0:
+        if i == -1:
             print('inputs shape: ', inputs.shape)
             print('labels shape: ', labels.shape)
             print('Max labels: ', labels.max())
@@ -499,7 +504,10 @@ def evaluate_network(net, env, num_trials):
                   output_size=TRAINING_KWARGS['net_kwargs']['action_size'])
 
         net = net.to(DEVICE)  # pass to GPU for running forwards steps
-
+        
+        
+        state_dict = torch.load(get_modelpath(TASK) / 'net.pth')
+        print('state dict:', state_dict['vanilla.weight_ih_l0'])
         # load the trained network's weights from the saved file
         net.load_state_dict(torch.load(get_modelpath(TASK) / 'net.pth'))
 
@@ -677,7 +685,7 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 100
+    num_periods = 100 
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
@@ -716,3 +724,7 @@ if __name__ == '__main__':
     clean_minmax_activity = preprocess_activity(activity)
     plot_activity(activity=clean_minmax_activity, obs=obs, actions=actions,
                   gt=gt, trial=0)
+
+
+    # for name, param in net.named_parameters():
+    #     print(name, param.shape)
