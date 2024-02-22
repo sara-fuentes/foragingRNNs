@@ -174,6 +174,68 @@ def equalize_arrays(array_list):
     return padded_arrays
 
 
+# def run_agent_in_environment(num_steps_exp, env, net=None):
+#     """
+#     Run the agent in the environment for a specified number of steps.
+
+#     Parameters
+#     ----------
+#     env :
+#         The environment in which the agent interacts.
+#     num_steps : int
+#         The number of steps to run the agent in the environment
+
+#     Returns
+#     -------
+#     data : dict
+#         A dictionary containing recorded data:
+#             -'ob': Observations received from the environment.
+#             -'actions': Actions taken by the agent.
+#             -'gt': Ground truth information
+#             -perf :Information on performance
+#             -rew_mat: ----------
+#     """
+#     inputs = []
+#     actions = []
+#     gt = []
+#     perf = []
+#     rew_mat = []
+#     rew = 0
+#     action = 0
+#     ob = env.reset()
+#     step = 0
+#     for stp in range(int(num_steps_exp)):
+#         step += 1
+#         if net is None:
+#             action = env.action_space.sample()
+#         else:
+#             ob_array = np.array([ob, rew, action], dtype=np.int64)
+#             ob_array = ob_array[np.newaxis, np.newaxis, :]
+#             ob_tensor = torch.from_numpy(ob_array).type(torch.float)
+#             action, _ = net(ob_tensor)  # HINT: action, hidden = net(ob, hidden)
+#             action = torch.nn.functional.softmax(action, dim=2)
+#             action = action.detach().numpy()
+#             action = np.argmax(action[0, 0, :])
+#         ob, rew, done, info = env.step(action)
+#         inputs.append(ob)
+#         actions.append(action)
+#         gt.append(info['gt'])
+#         if isinstance(rew, np.ndarray):
+#             rew_mat.append(rew[0])
+#         else:
+#             rew_mat.append(rew)
+#         if info['new_trial']:
+#             perf.append(info['performance'])
+#         else:
+#             perf.append(0)
+#     print('last step: ', step)
+
+#     data = {'ob': np.array(inputs).astype(float),
+#             'actions': actions, 'gt': gt, 'perf': perf,
+#             'rew_mat': rew_mat}
+#     return data
+
+
 def run_agent_in_environment(num_steps_exp, env, net=None):
     """
     Run the agent in the environment for a specified number of steps.
@@ -182,18 +244,18 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     ----------
     env :
         The environment in which the agent interacts.
-    num_steps : int
-        The number of steps to run the agent in the environment
+    num_steps_exp : int
+        The number of steps to run the agent in the environment.
 
     Returns
     -------
     data : dict
         A dictionary containing recorded data:
-            -'ob': Observations received from the environment.
-            -'actions': Actions taken by the agent.
-            -'gt': Ground truth information
-            -perf :Information on performance
-            -rew_mat: ----------
+            - 'ob': Observations received from the environment.
+            - 'actions': Actions taken by the agent.
+            - 'gt': Ground truth information.
+            - 'perf': Information on performance.
+            - 'rew_mat': Reward matrix.
     """
     inputs = []
     actions = []
@@ -203,36 +265,40 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     rew = 0
     action = 0
     ob = env.reset()
+    step = 0
     for stp in range(int(num_steps_exp)):
+        step += 1
         if net is None:
             action = env.action_space.sample()
         else:
-            if ~isinstance(ob, np.ndarray):
-                ob = np.array([ob])
-            ob = np.array([ob, rew, action], dtype=np.int64)
-            ob = ob[np.newaxis, np.newaxis, :]
-            ob = torch.from_numpy(ob).type(torch.float)
-            action, _ = net(ob)  # HINT: action, hidden = net(ob, hidden)
-            action = torch.nn.functional.softmax(action, dim=2)
-            action = action.detach().numpy()
-            action = np.argmax(action[0, 0, :])
+            ob_tensor = torch.tensor([ob, rew, action], dtype=torch.float32)
+            ob_tensor = ob_tensor.unsqueeze(0).unsqueeze(0)
+            action_probs, _ = net(ob_tensor)  # Assuming `net` returns action probabilities
+            action_probs = torch.nn.functional.softmax(action_probs, dim=2)
+            action = torch.argmax(action_probs[0, 0]).item()
+
         ob, rew, done, info = env.step(action)
+        if done:
+            ob = env.reset()  # Reset environment if episode is done
+
         inputs.append(ob)
         actions.append(action)
-        gt.append(info['gt'])
+        gt.append(info.get('gt', None))
         if isinstance(rew, np.ndarray):
             rew_mat.append(rew[0])
         else:
             rew_mat.append(rew)
-        if info['new_trial']:
-            perf.append(info['performance'])
+        if info.get('new_trial', False):
+            perf.append(info.get('performance', None))
         else:
             perf.append(0)
+            
+    print('last step: ', step)
+
     data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
             'rew_mat': rew_mat}
     return data
-
 
 def build_dataset(data):
     """
@@ -615,14 +681,19 @@ if __name__ == '__main__':
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
-    debug = True
+    debug = False
+    period = 0
+
     for i in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
         #            'labels': seq_len x batch_size}
+        period += 1
+        print('period: ', period)
         data = run_agent_in_environment(env=env, net=net,
                                         num_steps_exp=num_steps_exp)
         if debug:
-            show_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
+            show_task(env_kwargs=env_kwargs, data=data,
+                      num_steps=num_steps_exp)
 
         dataset = build_dataset(data)
         # Train model with RL data
@@ -641,9 +712,7 @@ if __name__ == '__main__':
     num_trials = 1000
     # evaluate network
     activity, obs, actions, gt, info = evaluate_network(net=net, env=env,
-                                                        num_trials=num_trials,
-                                                        DEVICE=DEVICE)
-
+                                                        num_trials=num_trials)
     clean_minmax_activity = preprocess_activity(activity)
     plot_activity(activity=clean_minmax_activity, obs=obs, actions=actions,
                   gt=gt, trial=0)
