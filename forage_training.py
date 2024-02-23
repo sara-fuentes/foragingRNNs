@@ -80,14 +80,19 @@ class Net(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(Net, self).__init__()
 
+        self.hidden_size = hidden_size
         # INSTRUCTION 1: build a recurrent neural network with a single
         # recurrent layer and rectified linear units
         self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu')
         self.linear = nn.Linear(hidden_size, output_size)
 
-    def forward(self, x):
+    def forward(self, x, hidden=None):
+        # If hidden state is not provided, initialize it
+        if hidden is None:
+            hidden = torch.zeros(1, TRAINING_KWARGS['batch_size'],
+                                 self.hidden_size)
         # INSTRUCTION 2: get the output of the network for a given input
-        out, _ = self.vanilla(x)
+        out, _ = self.vanilla(x, hidden)
         x = self.linear(out)
         return x, out
 
@@ -174,67 +179,6 @@ def equalize_arrays(array_list):
     return padded_arrays
 
 
-# def run_agent_in_environment(num_steps_exp, env, net=None):
-#     """
-#     Run the agent in the environment for a specified number of steps.
-
-#     Parameters
-#     ----------
-#     env :
-#         The environment in which the agent interacts.
-#     num_steps : int
-#         The number of steps to run the agent in the environment
-
-#     Returns
-#     -------
-#     data : dict
-#         A dictionary containing recorded data:
-#             -'ob': Observations received from the environment.
-#             -'actions': Actions taken by the agent.
-#             -'gt': Ground truth information
-#             -perf :Information on performance
-#             -rew_mat: ----------
-#     """
-#     inputs = []
-#     actions = []
-#     gt = []
-#     perf = []
-#     rew_mat = []
-#     rew = 0
-#     action = 0
-#     ob = env.reset()
-#     step = 0
-#     for stp in range(int(num_steps_exp)):
-#         step += 1
-#         if net is None:
-#             action = env.action_space.sample()
-#         else:
-#             ob_array = np.array([ob, rew, action], dtype=np.int64)
-#             ob_array = ob_array[np.newaxis, np.newaxis, :]
-#             ob_tensor = torch.from_numpy(ob_array).type(torch.float)
-#             action, _ = net(ob_tensor)  # HINT: action, hidden = net(ob, hidden)
-#             action = torch.nn.functional.softmax(action, dim=2)
-#             action = action.detach().numpy()
-#             action = np.argmax(action[0, 0, :])
-#         ob, rew, done, info = env.step(action)
-#         inputs.append(ob)
-#         actions.append(action)
-#         gt.append(info['gt'])
-#         if isinstance(rew, np.ndarray):
-#             rew_mat.append(rew[0])
-#         else:
-#             rew_mat.append(rew)
-#         if info['new_trial']:
-#             perf.append(info['performance'])
-#         else:
-#             perf.append(0)
-#     print('last step: ', step)
-
-#     data = {'ob': np.array(inputs).astype(float),
-#             'actions': actions, 'gt': gt, 'perf': perf,
-#             'rew_mat': rew_mat}
-#     return data
-
 
 def run_agent_in_environment(num_steps_exp, env, net=None):
     """
@@ -265,15 +209,16 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     rew = 0
     action = 0
     ob = env.reset()
-    step = 0
+    if net is not None:
+        hidden = torch.zeros(1, 1, net.hidden_size)
     for stp in range(int(num_steps_exp)):
-        step += 1
         if net is None:
             action = env.action_space.sample()
         else:
             ob_tensor = torch.tensor([ob, rew, action], dtype=torch.float32)
             ob_tensor = ob_tensor.unsqueeze(0).unsqueeze(0)
-            action_probs, _ = net(ob_tensor)  # Assuming `net` returns action probabilities
+            action_probs, hidden = net(x=ob_tensor, hidden=hidden)
+            # Assuming `net` returns action probabilities
             action_probs = torch.nn.functional.softmax(action_probs, dim=2)
             action = torch.argmax(action_probs[0, 0]).item()
 
@@ -467,7 +412,7 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
         # print average loss over last 200 training iterations and save the
         # current network
         running_loss += loss.item()
-        if i % 200 == 199:
+        if i % 10 == 9:
             print('{:d} loss: {:0.5f}'.format(i + 1, running_loss / 200))
             running_loss = 0.0
 
@@ -642,7 +587,8 @@ if __name__ == '__main__':
     # Set up config:
 
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0.2, 0.8]),
-                  'blk_dur': 50}
+                  'blk_dur': 50, 'timing': {'ITI': ngym.random.TruncExp(200, 100, 300),
+                                            'fixation': 200,'decision': 200}  # Decision period}
 
     # call function to sample
     dataset, env = get_dataset(
@@ -690,15 +636,15 @@ if __name__ == '__main__':
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
-    period = 0
 
     for i in range(num_periods):
-        # dataset = {'inputs':seq_len x batch_size x num_inputs,
+        # dataset = {'
+        # inputs':seq_len x batch_size x num_inputs,
         #            'labels': seq_len x batch_size}
-        period += 1
-        print('period: ', period)
-        data = run_agent_in_environment(env=env, net=net,
-                                        num_steps_exp=num_steps_exp)
+        print('period: ', i)
+        with torch.no_grad():
+            data = run_agent_in_environment(env=env, net=net,
+                                            num_steps_exp=num_steps_exp)
         if debug:
             show_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
