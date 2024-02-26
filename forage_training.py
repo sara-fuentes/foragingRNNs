@@ -37,7 +37,7 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 200,
+                   'n_epochs': 10,
                    'batch_size': 16,
                    'seq_len': 100,
                    'TASK': TASK}
@@ -315,7 +315,20 @@ def build_dataset(data):
     return dataset
 
 
-def show_task(env_kwargs, data, num_steps):
+def plot_dataset(dataset, batch=0):
+    f, ax = plt.subplots(nrows=4, sharex=True)
+    epochs = [0, TRAINING_KWARGS['n_epochs']-1]
+    for i_ep, ep in enumerate(epochs):
+        inputs = dataset['inputs'][ep, :, batch, :]
+        labels = dataset['labels'][ep, :, batch]
+        labels_b = labels[:, np.newaxis]
+        ax[2*i_ep].imshow(inputs.T, aspect='auto')
+        ax[2*i_ep+1].imshow(labels_b.T, aspect='auto')
+    ax[i_ep].set_xlabel('Timestep')
+    asdasd
+
+
+def plot_task(env_kwargs, data, num_steps):
     """
     Parameters
     ----------
@@ -609,10 +622,10 @@ if __name__ == '__main__':
     plt.close('all')
     # Set up config:
 
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0.2, 0.8]),
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 2000, 'timing':
                       {'ITI': ngym_f.random.TruncExp(200, 100, 300),
-                       'fixation': 200,'decision': 200}} # Decision period}
+                       'fixation': 200, 'decision': 200}}  # Decision period}
 
     # call function to sample
     dataset, env = get_dataset(
@@ -631,7 +644,7 @@ if __name__ == '__main__':
 
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
 
-    show_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
+    plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
 
     num_neurons = 64
 
@@ -659,27 +672,29 @@ if __name__ == '__main__':
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
-    debug = False
+    debug = True
 
     mean_perf = []
-    mean_rew  = []
+    mean_rew = []
     period = []
-    for i in range(num_periods):
+    for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
-         #            'labels': seq_len x batch_size}
-        print('period: ', i)
+        #            'labels': seq_len x batch_size}
+        print('period: ', i_per)
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
                                             num_steps_exp=num_steps_exp)
         if debug:
-            show_task(env_kwargs=env_kwargs, data=data,
+            plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
-            
+
         mean_perf.append(data['mean_perf'])
-        mean_rew.append(data['mean_rew'])      
-        period.append(i)
-        
+        mean_rew.append(data['mean_rew'])
+        period.append(i_per)
+
         dataset = build_dataset(data)
+        if debug:
+            plot_dataset(dataset)
         # Train model with RL data
         train_network(num_epochs=num_epochs, dataset=dataset, net=net,
                       optimizer=optimizer, criterion=criterion, env=env)
