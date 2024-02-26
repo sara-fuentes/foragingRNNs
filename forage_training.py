@@ -37,7 +37,7 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 20,
+                   'n_epochs': 200,
                    'batch_size': 16,
                    'seq_len': 100,
                    'TASK': TASK}
@@ -246,7 +246,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     print('------------')
     data = {'ob': np.array(inputs).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
-            'rew_mat': rew_mat}
+            'rew_mat': rew_mat, 'mean_perf': mean_perf,
+            'mean_rew': mean_rew}
     return data
 
 
@@ -265,12 +266,12 @@ def build_dataset(data):
     extra dimensions in inputs correspond to previous action and previous reward
 
     """
-    TRAINING_KWARGS = {'dt': 100,
-                       'lr': 1e-2,
-                       'n_epochs': 20,
-                       'batch_size': 16,
-                       'seq_len': 100,
-                       'TASK': TASK}
+    # TRAINING_KWARGS = {'dt': 100,
+    #                    'lr': 1e-2,
+    #                    'n_epochs': 20,
+    #                    'batch_size': 16,
+    #                    'seq_len': 100,
+    #                    'TASK': TASK}
     # OBSERVATION
     ob_array = data['ob']
     # reshape
@@ -580,6 +581,28 @@ def plot_activity(activity, obs, actions, gt, config, trial):
 
     plt.tight_layout()
 
+def plot_perf_and_rew(period, mean_perf, mean_rew):
+    """
+    Plots mean performance and mean reward as a function of period
+
+    Parameters
+    ----------
+    period : list
+    mean_perf : list
+    mean_rew : list
+
+    """
+    f, ax = plt.subplots(nrows=2)
+    ax[0].plot(period, mean_perf)
+    ax[0].set_ylabel('Mean performance', fontsize=14)
+    ax[0].set_xlabel('Period', fontsize=14)
+    ax[0].tick_params(axis='both', labelsize=12)
+    ax[1].plot(period, mean_rew)
+    ax[1].set_ylabel('Mean reward', fontsize=14)
+    ax[1].set_xlabel('Period', fontsize=14)
+    ax[1].tick_params(axis='both', labelsize=12)
+    plt.tight_layout()
+
 
 # --- MAIN
 if __name__ == '__main__':
@@ -587,8 +610,9 @@ if __name__ == '__main__':
     # Set up config:
 
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0.2, 0.8]),
-                  'blk_dur': 50, 'timing': {'ITI': ngym.random.TruncExp(200, 100, 300),
-                                            'fixation': 200,'decision': 200}  # Decision period}
+                  'blk_dur': 2000, 'timing':
+                      {'ITI': ngym_f.random.TruncExp(200, 100, 300),
+                       'fixation': 200,'decision': 200}} # Decision period}
 
     # call function to sample
     dataset, env = get_dataset(
@@ -631,16 +655,18 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 100 
+    num_periods = 150
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
 
+    mean_perf = []
+    mean_rew  = []
+    period = []
     for i in range(num_periods):
-        # dataset = {'
-        # inputs':seq_len x batch_size x num_inputs,
-        #            'labels': seq_len x batch_size}
+        # dataset = {'inputs':seq_len x batch_size x num_inputs,
+         #            'labels': seq_len x batch_size}
         print('period: ', i)
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
@@ -648,12 +674,17 @@ if __name__ == '__main__':
         if debug:
             show_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
-
+            
+        mean_perf.append(data['mean_perf'])
+        mean_rew.append(data['mean_rew'])      
+        period.append(i)
+        
         dataset = build_dataset(data)
         # Train model with RL data
         train_network(num_epochs=num_epochs, dataset=dataset, net=net,
                       optimizer=optimizer, criterion=criterion, env=env)
 
+    plot_perf_and_rew(period, mean_perf, mean_rew)
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
     # with open(get_modelpath(TASK) / 'config.json') as f:
@@ -674,3 +705,4 @@ if __name__ == '__main__':
 
     # for name, param in net.named_parameters():
     #     print(name, param.shape)
+    
