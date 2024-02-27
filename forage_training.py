@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 import os
 import sys
+import time
 sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
 sys.path.append('C:/Users/saraf')
 # packages to save data
@@ -201,7 +202,6 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             - 'perf': Information on performance.
             - 'rew_mat': Reward matrix.
     """
-    inputs = []
     actions = []
     gt = []
     perf = []
@@ -209,6 +209,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     rew = 0
     action = 0
     ob = env.reset()
+    inputs = [ob]
     if net is not None:
         hidden = torch.zeros(1, 1, net.hidden_size)
     for stp in range(int(num_steps_exp)):
@@ -244,7 +245,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     mean_rew = np.mean(rew_mat)
     print('mean reward: ', mean_rew)
     print('------------')
-    data = {'ob': np.array(inputs).astype(float),
+    data = {'ob': np.array(inputs[:-1]).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
             'rew_mat': rew_mat, 'mean_perf': mean_perf,
             'mean_rew': mean_rew}
@@ -274,41 +275,54 @@ def build_dataset(data):
     #                    'TASK': TASK}
     # OBSERVATION
     ob_array = data['ob']
-    # reshape
-    ob_array = ob_array.reshape(TRAINING_KWARGS['n_epochs'],
-                                TRAINING_KWARGS['seq_len'],
-                                TRAINING_KWARGS['batch_size'])
     # REWARD
     rew_array = data['rew_mat']
     # insert zero at the beginning of each row
     rew_array = np.insert(rew_array, 0, 0)
     # remove the last element of each row
     rew_array = rew_array[:-1]
-
-    # reshape
-    rew_array = np.array(rew_array).reshape(TRAINING_KWARGS['n_epochs'],
-                                            TRAINING_KWARGS['seq_len'],
-                                            TRAINING_KWARGS['batch_size'])
+    rew_array = np.array(rew_array)
     # ACTION
     action_array = data['actions']
     # insert a zero at the beginning of each row
     action_array = np.insert(action_array, 0, 0)
     # remove the last element of each row
     action_array = action_array[:-1]
-
+    action_array = np.array(action_array)
+    # build dataset
+    # TODO: HERE
+    inputs = np.stack((ob_array, rew_array, action_array), axis=1)
+    inputs_resh = np.zeros((TRAINING_KWARGS['seq_len'],
+                           TRAINING_KWARGS['batch_size'],
+                           3,
+                           TRAINING_KWARGS['n_epochs']))
+    t0 = time.time()
+    for i_ep in range(TRAINING_KWARGS['n_epochs']):
+        for i_b in range(TRAINING_KWARGS['batch_size']):
+            inputs_resh[:, i_b, :, i_ep] =\
+                inputs[i_ep*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']+i_b*TRAINING_KWARGS['seq_len']:
+                i_ep*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']+(i_b+1)*TRAINING_KWARGS['seq_len'], :]
+    t1 = time.time()    
+    for_t = t1-t0
+    print(for_t)
     # reshape
-    action_array = np.array(action_array).reshape(TRAINING_KWARGS['n_epochs'],
-                                                  TRAINING_KWARGS['seq_len'],
-                                                  TRAINING_KWARGS['batch_size'])
+    t0 = time.time()
+    inputs = inputs.reshape(TRAINING_KWARGS['seq_len'],
+                            TRAINING_KWARGS['batch_size'],
+                            3,
+                            TRAINING_KWARGS['n_epochs'])
+    t1 = time.time() 
+    res_t = t1-t0
+    print(res_t)
+    print(for_t/res_t)
+    asdasd
 
-    # create matrix
-    inputs = np.stack((ob_array, rew_array, action_array), axis=3)
 
     labels = np.array(data['gt'])
     # reshape
-    labels = labels.reshape(TRAINING_KWARGS['n_epochs'],
-                            TRAINING_KWARGS['seq_len'],
-                            TRAINING_KWARGS['batch_size'])
+    labels = labels.reshape(TRAINING_KWARGS['seq_len'],
+                            TRAINING_KWARGS['batch_size'],
+                            TRAINING_KWARGS['n_epochs'])
 
     dataset = {'inputs': inputs, 'labels': labels}
 
@@ -319,8 +333,9 @@ def plot_dataset(dataset, batch=0):
     f, ax = plt.subplots(nrows=4, sharex=True)
     epochs = [0, TRAINING_KWARGS['n_epochs']-1]
     for i_ep, ep in enumerate(epochs):
-        inputs = dataset['inputs'][ep, :, batch, :]
-        labels = dataset['labels'][ep, :, batch]
+        # TODO: HERE
+        inputs = dataset['inputs'][:, batch, :, ep]
+        labels = dataset['labels'][:, batch, ep]
         labels_b = labels[:, np.newaxis]
         ax[2*i_ep].imshow(inputs.T, aspect='auto')
         ax[2*i_ep+1].imshow(labels_b.T, aspect='auto')
@@ -393,8 +408,9 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
 
     for i in range(num_epochs):
         # get inputs and labels and pass them to the GPU
-        inputs = dataset['inputs'][i]
-        labels = dataset['labels'][i]
+        # TODO: HERE
+        inputs = dataset['inputs'][:, :, :, i]
+        labels = dataset['labels'][:, :, :, i]
         # inputs = np.expand_dims(inputs, axis=2)
         inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
         labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
@@ -670,6 +686,7 @@ if __name__ == '__main__':
 
     num_periods = 150
     num_epochs = TRAINING_KWARGS['n_epochs']
+    # TODO: HERE
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = True
