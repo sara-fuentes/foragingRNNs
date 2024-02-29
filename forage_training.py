@@ -38,7 +38,7 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 10,
+                   'n_epochs': 1,
                    'batch_size': 16,
                    'seq_len': 100,
                    'TASK': TASK}
@@ -252,95 +252,120 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     return data
 
 
+# def build_dataset(data):
+#     """
+
+#     Parameters
+#     ----------
+#     data : TYPE
+#         DESCRIPTION.
+
+#     Returns
+#     -------
+#     dataset = {'inputs':n_epochs x seq_len x batch_size x (num_inputs+1+1),
+#             'labels': seq_len x batch_size}
+#     extra dimensions in inputs correspond to previous action and previous reward
+
+#     """
+#     # TRAINING_KWARGS = {'dt': 100,
+#     #                    'lr': 1e-2,
+#     #                    'n_epochs': 20,
+#     #                    'batch_size': 16,
+#     #                    'seq_len': 100,
+#     #                    'TASK': TASK}
+#     # OBSERVATION
+#     ob_array = data['ob']
+#     # REWARD
+#     rew_array = data['rew_mat']
+#     # insert zero at the beginning of each row
+#     rew_array = np.insert(rew_array, 0, 0)
+#     # remove the last element of each row
+#     rew_array = rew_array[:-1]
+#     rew_array = np.array(rew_array)
+#     # ACTION
+#     action_array = data['actions']
+#     # insert a zero at the beginning of each row
+#     action_array = np.insert(action_array, 0, 0)
+#     # remove the last element of each row
+#     action_array = action_array[:-1]
+#     action_array = np.array(action_array)
+#     # build dataset
+#     # TODO: HERE
+#     inputs = np.stack((ob_array, rew_array, action_array), axis=1)
+  
+#     inputs = inputs.reshape(TRAINING_KWARGS['seq_len'],
+#                             TRAINING_KWARGS['batch_size'],
+#                             3)
+
+#     labels = np.array(data['gt'])
+#     # reshape
+#     labels = labels.reshape(TRAINING_KWARGS['seq_len'],
+#                             TRAINING_KWARGS['batch_size'])
+    
+#     dataset = {'inputs': inputs, 'labels': labels}
+
+#     return dataset
+
 def build_dataset(data):
-    """
 
-    Parameters
-    ----------
-    data : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    dataset = {'inputs':n_epochs x seq_len x batch_size x (num_inputs+1+1),
-            'labels': seq_len x batch_size}
-    extra dimensions in inputs correspond to previous action and previous reward
-
-    """
-    # TRAINING_KWARGS = {'dt': 100,
-    #                    'lr': 1e-2,
-    #                    'n_epochs': 20,
-    #                    'batch_size': 16,
-    #                    'seq_len': 100,
-    #                    'TASK': TASK}
     # OBSERVATION
-    ob_array = data['ob']
+    ob_array = np.array(data['ob'])
+    # reshape
+    ob_array = ob_array.reshape(TRAINING_KWARGS['batch_size'],
+                                TRAINING_KWARGS['seq_len'])
     # REWARD
-    rew_array = data['rew_mat']
+    rew_array = np.array(data['rew_mat'])
     # insert zero at the beginning of each row
     rew_array = np.insert(rew_array, 0, 0)
     # remove the last element of each row
     rew_array = rew_array[:-1]
-    rew_array = np.array(rew_array)
+    # reshape
+    rew_array = rew_array.reshape(TRAINING_KWARGS['batch_size'],
+                                  TRAINING_KWARGS['seq_len'])
+    
     # ACTION
-    action_array = data['actions']
+    action_array = np.array(data['actions'])
     # insert a zero at the beginning of each row
     action_array = np.insert(action_array, 0, 0)
     # remove the last element of each row
     action_array = action_array[:-1]
-    action_array = np.array(action_array)
-    # build dataset
-    # TODO: HERE
-    inputs = np.stack((ob_array, rew_array, action_array), axis=1)
-    inputs_resh = np.zeros((TRAINING_KWARGS['seq_len'],
-                           TRAINING_KWARGS['batch_size'],
-                           3,
-                           TRAINING_KWARGS['n_epochs']))
-    t0 = time.time()
-    for i_ep in range(TRAINING_KWARGS['n_epochs']):
-        for i_b in range(TRAINING_KWARGS['batch_size']):
-            inputs_resh[:, i_b, :, i_ep] =\
-                inputs[i_ep*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']+i_b*TRAINING_KWARGS['seq_len']:
-                i_ep*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']+(i_b+1)*TRAINING_KWARGS['seq_len'], :]
-    t1 = time.time()    
-    for_t = t1-t0
-    print(for_t)
     # reshape
-    t0 = time.time()
-    inputs = inputs.reshape(TRAINING_KWARGS['seq_len'],
-                            TRAINING_KWARGS['batch_size'],
-                            3,
-                            TRAINING_KWARGS['n_epochs'])
-    t1 = time.time() 
-    res_t = t1-t0
-    print(res_t)
-    print(for_t/res_t)
-    asdasd
-
-
+    action_array = action_array.reshape(TRAINING_KWARGS['batch_size'],
+                                        TRAINING_KWARGS['seq_len'])
+    
+    # inputs
+    inputs = np.stack((ob_array, rew_array, action_array), axis=2)
+    
+    # labels
     labels = np.array(data['gt'])
     # reshape
-    labels = labels.reshape(TRAINING_KWARGS['seq_len'],
-                            TRAINING_KWARGS['batch_size'],
-                            TRAINING_KWARGS['n_epochs'])
+    labels = labels.reshape(TRAINING_KWARGS['batch_size'],
+                            TRAINING_KWARGS['seq_len'])
 
     dataset = {'inputs': inputs, 'labels': labels}
-
     return dataset
 
-
+# def plot_dataset(dataset, batch=0):
+#     f, ax = plt.subplots(nrows=4, sharex=True)
+#     epochs = [0, TRAINING_KWARGS['n_epochs']-1]
+#     for i_ep, ep in enumerate(epochs):
+#         # TODO: HERE
+#         inputs = dataset['inputs'][:, batch, :, ep]
+#         labels = dataset['labels'][:, batch, ep]
+#         labels_b = labels[:, np.newaxis]
+#         ax[2*i_ep].imshow(inputs.T, aspect='auto')
+#         ax[2*i_ep+1].imshow(labels_b.T, aspect='auto')
+#     ax[i_ep].set_xlabel('Timestep')
+#     asdasd
+    
 def plot_dataset(dataset, batch=0):
     f, ax = plt.subplots(nrows=4, sharex=True)
-    epochs = [0, TRAINING_KWARGS['n_epochs']-1]
-    for i_ep, ep in enumerate(epochs):
-        # TODO: HERE
-        inputs = dataset['inputs'][:, batch, :, ep]
-        labels = dataset['labels'][:, batch, ep]
+    for i in range(2):
+        inputs = dataset['inputs'][i,:,:]
+        labels = dataset['labels'][i,:]
         labels_b = labels[:, np.newaxis]
-        ax[2*i_ep].imshow(inputs.T, aspect='auto')
-        ax[2*i_ep+1].imshow(labels_b.T, aspect='auto')
-    ax[i_ep].set_xlabel('Timestep')
-    asdasd
+        ax[2*i].imshow(inputs.T, aspect='auto')
+        ax[2*i+1].imshow(labels_b.T, aspect='auto')
 
 
 def plot_task(env_kwargs, data, num_steps):
