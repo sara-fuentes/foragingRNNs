@@ -41,6 +41,7 @@ TRAINING_KWARGS = {'dt': 100,
                    'n_epochs': 1,
                    'batch_size': 16,
                    'seq_len': 100,
+                   'training_count': 10,
                    'TASK': TASK}
 
 
@@ -90,7 +91,7 @@ class Net(nn.Module):
     def forward(self, x, hidden=None):
         # If hidden state is not provided, initialize it
         if hidden is None:
-            hidden = torch.zeros(1, TRAINING_KWARGS['batch_size'],
+            hidden = torch.zeros(1, TRAINING_KWARGS['seq_len'],
                                  self.hidden_size)
         # INSTRUCTION 2: get the output of the network for a given input
         out, _ = self.vanilla(x, hidden)
@@ -406,7 +407,7 @@ def plot_task(env_kwargs, data, num_steps):
     ax[3].set_xlabel('Time (ms)')
 
 
-def train_network(num_epochs, net, optimizer, criterion, env, dataset):
+def train_network(training_count, net, optimizer, criterion, env, dataset):
     """
     Train the neural network.
 
@@ -431,16 +432,16 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
     # print('Training task ', TASK)
     running_loss = 0.0
 
-    for i in range(num_epochs):
+    for count in range(training_count):
         # get inputs and labels and pass them to the GPU
         # TODO: HERE
-        inputs = dataset['inputs'][:, :, :, i]
-        labels = dataset['labels'][:, :, :, i]
+        inputs = dataset['inputs']
+        labels = dataset['labels']
         # inputs = np.expand_dims(inputs, axis=2)
         inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
         labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
         # print shapes of inputs and labels
-        if i == -1:
+        if count == -1:
             print('inputs shape: ', inputs.shape)
             print('labels shape: ', labels.shape)
             print('Max labels: ', labels.max())
@@ -467,8 +468,8 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
         # print average loss over last 200 training iterations and save the
         # current network
         running_loss += loss.item()
-        if i % 10 == 9:
-            print('{:d} loss: {:0.5f}'.format(i + 1, running_loss / 200))
+        if count % 10 == 9:
+            print('{:d} loss: {:0.5f}'.format(count + 1, running_loss / 200))
             running_loss = 0.0
 
             # save current state of network's parameters
@@ -709,12 +710,13 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 150
+    num_periods = 40
     num_epochs = TRAINING_KWARGS['n_epochs']
+    training_count = TRAINING_KWARGS['training_count']
     # TODO: HERE
     num_steps_exp =\
         num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
-    debug = True
+    debug = False
 
     mean_perf = []
     mean_rew = []
@@ -738,7 +740,7 @@ if __name__ == '__main__':
         if debug:
             plot_dataset(dataset)
         # Train model with RL data
-        train_network(num_epochs=num_epochs, dataset=dataset, net=net,
+        train_network(training_count=training_count, dataset=dataset, net=net,
                       optimizer=optimizer, criterion=criterion, env=env)
 
     plot_perf_and_rew(period, mean_perf, mean_rew)
