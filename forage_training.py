@@ -38,10 +38,9 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 1,
+                   'n_epochs': 10,
                    'batch_size': 16,
                    'seq_len': 100,
-                   'training_count': 10,
                    'TASK': TASK}
 
 
@@ -253,60 +252,6 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     return data
 
 
-# def build_dataset(data):
-#     """
-
-#     Parameters
-#     ----------
-#     data : TYPE
-#         DESCRIPTION.
-
-#     Returns
-#     -------
-#     dataset = {'inputs':n_epochs x seq_len x batch_size x (num_inputs+1+1),
-#             'labels': seq_len x batch_size}
-#     extra dimensions in inputs correspond to previous action and previous reward
-
-#     """
-#     # TRAINING_KWARGS = {'dt': 100,
-#     #                    'lr': 1e-2,
-#     #                    'n_epochs': 20,
-#     #                    'batch_size': 16,
-#     #                    'seq_len': 100,
-#     #                    'TASK': TASK}
-#     # OBSERVATION
-#     ob_array = data['ob']
-#     # REWARD
-#     rew_array = data['rew_mat']
-#     # insert zero at the beginning of each row
-#     rew_array = np.insert(rew_array, 0, 0)
-#     # remove the last element of each row
-#     rew_array = rew_array[:-1]
-#     rew_array = np.array(rew_array)
-#     # ACTION
-#     action_array = data['actions']
-#     # insert a zero at the beginning of each row
-#     action_array = np.insert(action_array, 0, 0)
-#     # remove the last element of each row
-#     action_array = action_array[:-1]
-#     action_array = np.array(action_array)
-#     # build dataset
-#     # TODO: HERE
-#     inputs = np.stack((ob_array, rew_array, action_array), axis=1)
-  
-#     inputs = inputs.reshape(TRAINING_KWARGS['seq_len'],
-#                             TRAINING_KWARGS['batch_size'],
-#                             3)
-
-#     labels = np.array(data['gt'])
-#     # reshape
-#     labels = labels.reshape(TRAINING_KWARGS['seq_len'],
-#                             TRAINING_KWARGS['batch_size'])
-    
-#     dataset = {'inputs': inputs, 'labels': labels}
-
-#     return dataset
-
 def build_dataset(data):
 
     # OBSERVATION
@@ -346,19 +291,7 @@ def build_dataset(data):
     dataset = {'inputs': inputs, 'labels': labels}
     return dataset
 
-# def plot_dataset(dataset, batch=0):
-#     f, ax = plt.subplots(nrows=4, sharex=True)
-#     epochs = [0, TRAINING_KWARGS['n_epochs']-1]
-#     for i_ep, ep in enumerate(epochs):
-#         # TODO: HERE
-#         inputs = dataset['inputs'][:, batch, :, ep]
-#         labels = dataset['labels'][:, batch, ep]
-#         labels_b = labels[:, np.newaxis]
-#         ax[2*i_ep].imshow(inputs.T, aspect='auto')
-#         ax[2*i_ep+1].imshow(labels_b.T, aspect='auto')
-#     ax[i_ep].set_xlabel('Timestep')
-#     asdasd
-    
+
 def plot_dataset(dataset, batch=0):
     f, ax = plt.subplots(nrows=4, sharex=True)
     for i in range(2):
@@ -407,7 +340,7 @@ def plot_task(env_kwargs, data, num_steps):
     ax[3].set_xlabel('Time (ms)')
 
 
-def train_network(training_count, net, optimizer, criterion, env, dataset):
+def train_network(num_epochs, net, optimizer, criterion, env, dataset):
     """
     Train the neural network.
 
@@ -432,7 +365,7 @@ def train_network(training_count, net, optimizer, criterion, env, dataset):
     # print('Training task ', TASK)
     running_loss = 0.0
 
-    for count in range(training_count):
+    for ep in range(num_epochs):
         # get inputs and labels and pass them to the GPU
         # TODO: HERE
         inputs = dataset['inputs']
@@ -441,7 +374,7 @@ def train_network(training_count, net, optimizer, criterion, env, dataset):
         inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
         labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
         # print shapes of inputs and labels
-        if count == -1:
+        if ep == -1:
             print('inputs shape: ', inputs.shape)
             print('labels shape: ', labels.shape)
             print('Max labels: ', labels.max())
@@ -468,12 +401,12 @@ def train_network(training_count, net, optimizer, criterion, env, dataset):
         # print average loss over last 200 training iterations and save the
         # current network
         running_loss += loss.item()
-        if count % 10 == 9:
-            print('{:d} loss: {:0.5f}'.format(count + 1, running_loss / 200))
+        if ep % 10 == 9:
+            print('{:d} loss: {:0.5f}'.format(ep + 1, running_loss / 200))
             running_loss = 0.0
 
             # save current state of network's parameters
-            torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
+            # torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
 
 
 def evaluate_network(net, env, num_trials):
@@ -710,12 +643,11 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 40
+    num_periods = 250
     num_epochs = TRAINING_KWARGS['n_epochs']
-    training_count = TRAINING_KWARGS['training_count']
     # TODO: HERE
     num_steps_exp =\
-        num_epochs*TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
+        TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
 
     mean_perf = []
@@ -740,7 +672,7 @@ if __name__ == '__main__':
         if debug:
             plot_dataset(dataset)
         # Train model with RL data
-        train_network(training_count=training_count, dataset=dataset, net=net,
+        train_network(num_epochs=num_epochs, dataset=dataset, net=net,
                       optimizer=optimizer, criterion=criterion, env=env)
 
     plot_perf_and_rew(period, mean_perf, mean_rew)
