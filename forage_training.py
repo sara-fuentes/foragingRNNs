@@ -38,7 +38,7 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 10,
+                   'n_epochs': 20,
                    'batch_size': 16,
                    'seq_len': 100,
                    'TASK': TASK}
@@ -364,7 +364,6 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
     """
     # print('Training task ', TASK)
     running_loss = 0.0
-
     for ep in range(num_epochs):
         # get inputs and labels and pass them to the GPU
         # TODO: HERE
@@ -401,14 +400,18 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
         # print average loss over last 200 training iterations and save the
         # current network
         running_loss += loss.item()
-        if ep % 10 == 9:
-            print('{:d} loss: {:0.5f}'.format(ep + 1, running_loss / 200))
-            running_loss = 0.0
+        if ep == 0:
+            loss_1st_ep =  running_loss / 200
+        # if ep % 2 == 0:
+        #     print('{:d} loss: {:0.5f}'.format(ep + 1, running_loss / 200))
+        #     running_loss = 0.0
 
             # save current state of network's parameters
             # torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
-
-
+            
+    return loss_1st_ep
+   
+    
 def evaluate_network(net, env, num_trials):
     """
     Evaluate the neural network on the specified environment.
@@ -569,7 +572,7 @@ def plot_activity(activity, obs, actions, gt, config, trial):
 
     plt.tight_layout()
 
-def plot_perf_and_rew(period, mean_perf, mean_rew):
+def plot_perf_rew_loss(period, mean_perf, mean_rew, loss_1st_ep):
     """
     Plots mean performance and mean reward as a function of period
 
@@ -580,15 +583,17 @@ def plot_perf_and_rew(period, mean_perf, mean_rew):
     mean_rew : list
 
     """
-    f, ax = plt.subplots(nrows=2)
-    ax[0].plot(period, mean_perf)
+    f, ax = plt.subplots(nrows=3)
+    ax[0].plot(period, mean_perf, marker='.', linestyle='-')
     ax[0].set_ylabel('Mean performance', fontsize=14)
-    ax[0].set_xlabel('Period', fontsize=14)
     ax[0].tick_params(axis='both', labelsize=12)
-    ax[1].plot(period, mean_rew)
+    ax[1].plot(period, mean_rew, marker='.', linestyle='-')
     ax[1].set_ylabel('Mean reward', fontsize=14)
-    ax[1].set_xlabel('Period', fontsize=14)
     ax[1].tick_params(axis='both', labelsize=12)
+    ax[2].plot(period, loss_1st_ep, marker='.', linestyle='-')
+    ax[2].set_ylabel('Loss 1st epoch', fontsize=14)
+    ax[2].set_xlabel('Period', fontsize=14)
+    ax[2].tick_params(axis='both', labelsize=12)
     plt.tight_layout()
 
 
@@ -643,16 +648,18 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 250
+    num_periods = 100
     num_epochs = TRAINING_KWARGS['n_epochs']
     # TODO: HERE
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
 
-    mean_perf = []
-    mean_rew = []
-    period = []
+    mean_perf_list = []
+    mean_rew_list = []
+    loss_1st_ep_list = []
+    period_list = []
+    
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
         #            'labels': seq_len x batch_size}
@@ -662,20 +669,23 @@ if __name__ == '__main__':
                                             num_steps_exp=num_steps_exp)
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
-                      num_steps=num_steps_exp)
+                      nums=num_steps_exp)
 
-        mean_perf.append(data['mean_perf'])
-        mean_rew.append(data['mean_rew'])
-        period.append(i_per)
+        mean_perf_list.append(data['mean_perf'])
+        mean_rew_list.append(data['mean_rew'])
+        period_list.append(i_per)
 
         dataset = build_dataset(data)
         if debug:
             plot_dataset(dataset)
         # Train model with RL data
-        train_network(num_epochs=num_epochs, dataset=dataset, net=net,
-                      optimizer=optimizer, criterion=criterion, env=env)
+        loss_1st_ep = train_network(num_epochs=num_epochs, dataset=dataset,
+                                    net=net, optimizer=optimizer,
+                                    criterion=criterion, env=env)
+        loss_1st_ep_list.append(loss_1st_ep)
 
-    plot_perf_and_rew(period, mean_perf, mean_rew)
+    plot_perf_rew_loss(period_list, mean_perf_list, mean_rew_list,
+                      loss_1st_ep_list)
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
     # with open(get_modelpath(TASK) / 'config.json') as f:
