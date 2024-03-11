@@ -596,7 +596,53 @@ def plot_perf_rew_loss(period, mean_perf, mean_rew, loss_1st_ep):
     ax[2].tick_params(axis='both', labelsize=12)
     plt.tight_layout()
 
+def rmse(predictions, targets):
+    # compute squared differences
+    differences_squared = [(x - y) ** 2 for x, y in zip(predictions, targets)]
+    # calculate mean of squared differences
+    mean_squared_diff = np.mean(differences_squared)
+    # take square root to obtain RMSE
+    rmse_value = np.sqrt(mean_squared_diff)
+    return rmse_value
 
+def compute_rmse(data):
+    prediction_no_action = []
+    target_no_action = []
+    prediction_fixation = []
+    target_fixation = []
+    prediction_2 = []
+    target_2 = []
+    prediction_3 = []
+    target_3 = []
+    
+    for idx, value in enumerate(data['gt']):
+        if value == 0:
+            target_no_action.append(value)
+            prediction_no_action.append(data['actions'][idx])
+        if value == 1:
+            target_fixation.append(value)
+            prediction_fixation.append(data['actions'][idx])
+        if value == 2:
+            target_2.append(value)
+            prediction_2.append(data['actions'][idx])
+        if value == 3:
+            target_3.append(value)
+            prediction_3.append(data['actions'][idx])
+    
+    no_action_rmse = rmse(prediction_no_action, target_no_action)
+    fixation_rmse = rmse(prediction_fixation, target_fixation)
+    2_rmse = rmse(prediction_2, target_2)
+    3_rmse = rmse(prediction_3, target_3)
+    
+    rmse_dict = {'no_action_rmse': no_action_rmse,
+                 'fixation_rmse': fixation_rmse,
+                 '2_rmse': 2_rmse,
+                 '3_rmse': 3_rmse}
+    
+    return rmse_dict
+    
+    
+    
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
@@ -660,6 +706,7 @@ if __name__ == '__main__':
     loss_1st_ep_list = []
     period_list = []
     data_list = []
+
     
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
