@@ -40,7 +40,7 @@ TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
                    'n_epochs': 20,
                    'batch_size': 16,
-                   'seq_len': 100,
+                   'seq_len': 200,
                    'TASK': TASK}
 
 
@@ -603,7 +603,7 @@ if __name__ == '__main__':
     # Set up config:
 
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
-                  'blk_dur': 2000, 'timing':
+                  'blk_dur': 20, 'timing':
                       {'ITI': ngym_f.random.TruncExp(200, 100, 300),
                        'fixation': 200, 'decision': 200}}  # Decision period}
 
@@ -648,7 +648,7 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 100
+    num_periods = 400
     num_epochs = TRAINING_KWARGS['n_epochs']
     # TODO: HERE
     num_steps_exp =\
@@ -659,6 +659,7 @@ if __name__ == '__main__':
     mean_rew_list = []
     loss_1st_ep_list = []
     period_list = []
+    data_list = []
     
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
@@ -667,9 +668,10 @@ if __name__ == '__main__':
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
                                             num_steps_exp=num_steps_exp)
+            data_list.append(data)
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
-                      nums=num_steps_exp)
+                      num_steps=num_steps_exp)
 
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
@@ -686,6 +688,8 @@ if __name__ == '__main__':
 
     plot_perf_rew_loss(period_list, mean_perf_list, mean_rew_list,
                       loss_1st_ep_list)
+    
+    plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
     # with open(get_modelpath(TASK) / 'config.json') as f:
