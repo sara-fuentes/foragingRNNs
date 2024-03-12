@@ -598,62 +598,49 @@ def plot_perf_rew_loss(num_periods, mean_perf, mean_rew, loss_1st_ep):
     ax[2].tick_params(axis='both', labelsize=12)
     plt.tight_layout()
 
-def rmse(predictions, targets):
-    # compute squared differences
-    differences_squared = [(x - y) ** 2 for x, y in zip(predictions, targets)]
-    # calculate mean of squared differences
-    mean_squared_diff = np.mean(differences_squared)
-    # take square root to obtain RMSE
-    rmse_value = np.sqrt(mean_squared_diff)
-    return rmse_value
-
-def compute_rmse(data):
+def compute_error(data):
     
     gt = np.array(data['gt'])
     act = np.array(data['actions'])
     
     indices_0 = np.where(gt == 0)[0]
     prediction_no_action = act[indices_0]
+    error_no_action = np.sum(prediction_no_action != 0)
     
     indices_1 = np.where(gt == 1)[0]
     prediction_fixation = act[indices_1]
+    error_fixation = np.sum(prediction_fixation != 1)
     
     indices_2 = np.where(gt == 2)[0]
     prediction_2 = act[indices_2]
-
-    indices_3 = np.where(gt  == 3)[0]
+    error_2 = np.sum(prediction_2 != 2)
+    
+    indices_3 = np.where(gt == 3)[0]
     prediction_3 = act[indices_3]
+    error_3 = np.sum(prediction_3 != 3)
     
-    rmse_no_action = rmse(prediction_no_action, 
-                          np.full(len(prediction_no_action), 0))
-    rmse_fixation = rmse(prediction_fixation,
-                         np.full(len(prediction_fixation), 1))
-    rmse_2 = rmse(prediction_2, np.full(len(prediction_2), 2))
-    rmse_3 = rmse(prediction_3, np.full(len(prediction_3), 3))
+    error_dict = {'error_no_action': error_no_action,
+                  'error_fixation': error_fixation,
+                  'error_2': error_2,
+                  'error_3': error_3}
     
-    rmse_dict = {'rmse_no_action': rmse_no_action,
-                 'rmse_fixation': rmse_fixation,
-                 'rmse_2': rmse_2,
-                 'rmse_3': rmse_3}
+    return error_dict
     
-    return rmse_dict
-
-    
-def plot_rmse(num_periods, rmse_no_action_list, rmse_fixation_list,
-              rmse_2_list, rmse_3_list):
+def plot_error(num_periods, error_no_action_list, error_fixation_list,
+              error_2_list, error_3_list):
     period = range(num_periods)
     f, ax = plt.subplots(nrows=4, sharex=True)
-    plt.suptitle('RMSE')
-    ax[0].plot(period, rmse_no_action_list, marker='.', linestyle='-')
+    plt.suptitle('Error', fontsize=16)
+    ax[0].plot(period, error_no_action_list, marker='.', linestyle='-')
     ax[0].set_ylabel('No action', fontsize=14)
     ax[0].tick_params(axis='both', labelsize=12)
-    ax[1].plot(period, rmse_fixation_list, marker='.', linestyle='-')
+    ax[1].plot(period, error_fixation_list, marker='.', linestyle='-')
     ax[1].set_ylabel('Fixation', fontsize=14)
     ax[1].tick_params(axis='both', labelsize=12)
-    ax[2].plot(period, rmse_2_list, marker='.', linestyle='-')
+    ax[2].plot(period, error_2_list, marker='.', linestyle='-')
     ax[2].set_ylabel('Decision 2', fontsize=14)
     ax[2].tick_params(axis='both', labelsize=12)
-    ax[3].plot(period, rmse_3_list, marker='.', linestyle='-')
+    ax[3].plot(period, error_3_list, marker='.', linestyle='-')
     ax[3].set_ylabel('Decision 3', fontsize=14)
     ax[3].tick_params(axis='both', labelsize=12)
     ax[3].set_xlabel('Period', fontsize=14)
@@ -710,7 +697,7 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 1000
+    num_periods = 80
     num_epochs = TRAINING_KWARGS['n_epochs']
     # TODO: HERE
     num_steps_exp =\
@@ -720,11 +707,11 @@ if __name__ == '__main__':
     mean_perf_list = []
     mean_rew_list = []
     loss_1st_ep_list = []
-    # data_list = []
-    rmse_no_action_list = []
-    rmse_fixation_list = []
-    rmse_2_list = []
-    rmse_3_list = []
+    data_list = []
+    error_no_action_list = []
+    error_fixation_list = []
+    error_2_list = []
+    error_3_list = []
     
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
@@ -733,7 +720,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
                                             num_steps_exp=num_steps_exp)
-            # data_list.append(data)
+            data_list.append(data)
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
@@ -750,18 +737,18 @@ if __name__ == '__main__':
                                     criterion=criterion, env=env)
         loss_1st_ep_list.append(loss_1st_ep)
         
-        rmse_dict = compute_rmse(data)
-        rmse_no_action_list.append(rmse_dict['rmse_no_action'])
-        rmse_fixation_list.append(rmse_dict['rmse_fixation'])
-        rmse_2_list.append(rmse_dict['rmse_2'])        
-        rmse_3_list.append(rmse_dict['rmse_3'])  
+        error_dict = compute_error(data)
+        error_no_action_list.append(error_dict['error_no_action'])
+        error_fixation_list.append(error_dict['error_fixation'])
+        error_2_list.append(error_dict['error_2'])        
+        error_3_list.append(error_dict['error_3'])  
     
         
     plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
                       loss_1st_ep_list)
     
-    plot_rmse(num_periods, rmse_no_action_list, rmse_fixation_list, 
-              rmse_2_list, rmse_3_list)
+    plot_error(num_periods, error_no_action_list, error_fixation_list, 
+              error_2_list, error_3_list)
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
