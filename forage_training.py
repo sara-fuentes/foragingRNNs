@@ -8,6 +8,7 @@ Created on Thu Feb  8 22:20:23 2024
 import torch.nn as nn
 import torch
 import ngym_foraging as ngym_f
+from ngym_foraging.wrappers import pass_reward, pass_action
 import gym
 import sklearn.discriminant_analysis as sklda
 import sklearn.model_selection as sklms
@@ -216,8 +217,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         if net is None:
             action = env.action_space.sample()
         else:
-            ob_tensor = torch.tensor([ob, rew, action], dtype=torch.float32)
-            ob_tensor = ob_tensor.unsqueeze(0).unsqueeze(0)
+            ob_tensor = torch.tensor([ob], dtype=torch.float32)
+            ob_tensor = ob_tensor.unsqueeze(0)
             action_probs, hidden = net(x=ob_tensor, hidden=hidden)
             # Assuming `net` returns action probabilities
             action_probs = torch.nn.functional.softmax(action_probs, dim=2)
@@ -662,26 +663,16 @@ def plot_rmse(num_periods, rmse_no_action_list, rmse_fixation_list,
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    # Set up config:
-
+    # Set up the task
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
                       {'ITI': ngym_f.random.TruncExp(200, 100, 300),
                        'fixation': 200, 'decision': 200}}  # Decision period}
 
     # call function to sample
-    dataset, env = get_dataset(
-        TASK=TASK, env_kwargs=env_kwargs)
-
-    inputs, labels = dataset()
-    print('inputs shape:', inputs.shape)
-    print('labels shape:', labels.shape)
-    print('Example inputs:')
-    print('Fixation     Stimulus Left Stimulus Right')
-    print(inputs[:20, 0])
-    print('Example labels:')
-    print(labels[:20, 0])
-
+    env = gym.make(TASK, **env_kwargs)
+    env = pass_reward.PassReward(env)
+    env = pass_action.PassAction(env)
     num_steps = 400
 
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
@@ -692,7 +683,7 @@ if __name__ == '__main__':
 
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
-                  'input_size': env.observation_space.n+1+1}
+                  'input_size': env.observation_space.shape[0]}
 
     net = Net(input_size=net_kwargs['input_size'],
               hidden_size=net_kwargs['hidden_size'],
