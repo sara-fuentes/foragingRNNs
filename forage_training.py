@@ -682,7 +682,7 @@ if __name__ == '__main__':
     print('Example labels:')
     print(labels[:20, 0])
 
-    num_steps = 10
+    num_steps = 400
 
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
 
