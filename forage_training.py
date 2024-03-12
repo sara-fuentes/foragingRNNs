@@ -572,17 +572,19 @@ def plot_activity(activity, obs, actions, gt, config, trial):
 
     plt.tight_layout()
 
-def plot_perf_rew_loss(period, mean_perf, mean_rew, loss_1st_ep):
+def plot_perf_rew_loss(num_periods, mean_perf, mean_rew, loss_1st_ep):
     """
     Plots mean performance and mean reward as a function of period
 
     Parameters
     ----------
-    period : list
+    num_periods : int
+        number of periods
     mean_perf : list
     mean_rew : list
 
     """
+    period = range(num_periods)
     f, ax = plt.subplots(nrows=3)
     ax[0].plot(period, mean_perf, marker='.', linestyle='-')
     ax[0].set_ylabel('Mean performance', fontsize=14)
@@ -606,42 +608,56 @@ def rmse(predictions, targets):
     return rmse_value
 
 def compute_rmse(data):
-    prediction_no_action = []
-    target_no_action = []
-    prediction_fixation = []
-    target_fixation = []
-    prediction_2 = []
-    target_2 = []
-    prediction_3 = []
-    target_3 = []
     
-    for idx, value in enumerate(data['gt']):
-        if value == 0:
-            target_no_action.append(value)
-            prediction_no_action.append(data['actions'][idx])
-        if value == 1:
-            target_fixation.append(value)
-            prediction_fixation.append(data['actions'][idx])
-        if value == 2:
-            target_2.append(value)
-            prediction_2.append(data['actions'][idx])
-        if value == 3:
-            target_3.append(value)
-            prediction_3.append(data['actions'][idx])
+    gt = np.array(data['gt'])
+    act = np.array(data['actions'])
     
-    no_action_rmse = rmse(prediction_no_action, target_no_action)
-    fixation_rmse = rmse(prediction_fixation, target_fixation)
-    2_rmse = rmse(prediction_2, target_2)
-    3_rmse = rmse(prediction_3, target_3)
+    indices_0 = np.where(gt == 0)[0]
+    prediction_no_action = act[indices_0]
     
-    rmse_dict = {'no_action_rmse': no_action_rmse,
-                 'fixation_rmse': fixation_rmse,
-                 '2_rmse': 2_rmse,
-                 '3_rmse': 3_rmse}
+    indices_1 = np.where(gt == 1)[0]
+    prediction_fixation = act[indices_1]
+    
+    indices_2 = np.where(gt == 2)[0]
+    prediction_2 = act[indices_2]
+
+    indices_3 = np.where(gt  == 3)[0]
+    prediction_3 = act[indices_3]
+    
+    rmse_no_action = rmse(prediction_no_action, 
+                          np.full(len(prediction_no_action), 0))
+    rmse_fixation = rmse(prediction_fixation,
+                         np.full(len(prediction_fixation), 1))
+    rmse_2 = rmse(prediction_2, np.full(len(prediction_2), 2))
+    rmse_3 = rmse(prediction_3, np.full(len(prediction_3), 3))
+    
+    rmse_dict = {'rmse_no_action': rmse_no_action,
+                 'rmse_fixation': rmse_fixation,
+                 'rmse_2': rmse_2,
+                 'rmse_3': rmse_3}
     
     return rmse_dict
+
     
-    
+def plot_rmse(num_periods, rmse_no_action_list, rmse_fixation_list,
+              rmse_2_list, rmse_3_list):
+    period = range(num_periods)
+    f, ax = plt.subplots(nrows=4, sharex=True)
+    plt.suptitle('RMSE')
+    ax[0].plot(period, rmse_no_action_list, marker='.', linestyle='-')
+    ax[0].set_ylabel('No action', fontsize=14)
+    ax[0].tick_params(axis='both', labelsize=12)
+    ax[1].plot(period, rmse_fixation_list, marker='.', linestyle='-')
+    ax[1].set_ylabel('Fixation', fontsize=14)
+    ax[1].tick_params(axis='both', labelsize=12)
+    ax[2].plot(period, rmse_2_list, marker='.', linestyle='-')
+    ax[2].set_ylabel('Decision 2', fontsize=14)
+    ax[2].tick_params(axis='both', labelsize=12)
+    ax[3].plot(period, rmse_3_list, marker='.', linestyle='-')
+    ax[3].set_ylabel('Decision 3', fontsize=14)
+    ax[3].tick_params(axis='both', labelsize=12)
+    ax[3].set_xlabel('Period', fontsize=14)
+    plt.tight_layout()
     
 # --- MAIN
 if __name__ == '__main__':
@@ -666,7 +682,7 @@ if __name__ == '__main__':
     print('Example labels:')
     print(labels[:20, 0])
 
-    num_steps = 400
+    num_steps = 10
 
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
 
@@ -694,7 +710,7 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
 
-    num_periods = 400
+    num_periods = 1000
     num_epochs = TRAINING_KWARGS['n_epochs']
     # TODO: HERE
     num_steps_exp =\
@@ -704,9 +720,11 @@ if __name__ == '__main__':
     mean_perf_list = []
     mean_rew_list = []
     loss_1st_ep_list = []
-    period_list = []
-    data_list = []
-
+    # data_list = []
+    rmse_no_action_list = []
+    rmse_fixation_list = []
+    rmse_2_list = []
+    rmse_3_list = []
     
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
@@ -715,14 +733,13 @@ if __name__ == '__main__':
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
                                             num_steps_exp=num_steps_exp)
-            data_list.append(data)
+            # data_list.append(data)
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
 
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
-        period_list.append(i_per)
 
         dataset = build_dataset(data)
         if debug:
@@ -732,10 +749,19 @@ if __name__ == '__main__':
                                     net=net, optimizer=optimizer,
                                     criterion=criterion, env=env)
         loss_1st_ep_list.append(loss_1st_ep)
-
-    plot_perf_rew_loss(period_list, mean_perf_list, mean_rew_list,
+        
+        rmse_dict = compute_rmse(data)
+        rmse_no_action_list.append(rmse_dict['rmse_no_action'])
+        rmse_fixation_list.append(rmse_dict['rmse_fixation'])
+        rmse_2_list.append(rmse_dict['rmse_2'])        
+        rmse_3_list.append(rmse_dict['rmse_3'])  
+    
+        
+    plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
                       loss_1st_ep_list)
     
+    plot_rmse(num_periods, rmse_no_action_list, rmse_fixation_list, 
+              rmse_2_list, rmse_3_list)
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
