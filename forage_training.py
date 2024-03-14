@@ -258,31 +258,9 @@ def build_dataset(data):
     # OBSERVATION
     ob_array = np.array(data['ob'])
     # reshape
-    ob_array = ob_array.reshape(TRAINING_KWARGS['batch_size'],
-                                TRAINING_KWARGS['seq_len'])
-    # REWARD
-    rew_array = np.array(data['rew_mat'])
-    # insert zero at the beginning of each row
-    rew_array = np.insert(rew_array, 0, 0)
-    # remove the last element of each row
-    rew_array = rew_array[:-1]
-    # reshape
-    rew_array = rew_array.reshape(TRAINING_KWARGS['batch_size'],
-                                  TRAINING_KWARGS['seq_len'])
-    
-    # ACTION
-    action_array = np.array(data['actions'])
-    # insert a zero at the beginning of each row
-    action_array = np.insert(action_array, 0, 0)
-    # remove the last element of each row
-    action_array = action_array[:-1]
-    # reshape
-    action_array = action_array.reshape(TRAINING_KWARGS['batch_size'],
-                                        TRAINING_KWARGS['seq_len'])
-    
-    # inputs
-    inputs = np.stack((ob_array, rew_array, action_array), axis=2)
-    
+    inputs = ob_array.reshape(TRAINING_KWARGS['batch_size'],
+                              TRAINING_KWARGS['seq_len'], 3)
+        
     # labels
     labels = np.array(data['gt'])
     # reshape
@@ -774,4 +752,3 @@ if __name__ == '__main__':
 
     # for name, param in net.named_parameters():
     #     print(name, param.shape)
-    
