@@ -32,6 +32,7 @@ sys.path.append('C:/Users/saraf')
 # import torch and neural network modules to build RNNs
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+PATH = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/entire_net.pth'
 
 # name of the task on the neurogym library
 TASK = 'ForagingBlocks-v0'
@@ -84,6 +85,7 @@ class Net(nn.Module):
         self.hidden_size = hidden_size
         # INSTRUCTION 1: build a recurrent neural network with a single
         # recurrent layer and rectified linear units
+        # TODO: set seed for weights for RNN and Linear
         self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu')
         self.linear = nn.Linear(hidden_size, output_size)
 
@@ -410,115 +412,6 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
             # torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
             
     return loss_1st_ep
-   
-    
-def evaluate_network(net, env, num_trials):
-    """
-    Evaluate the neural network on the specified environment.
-
-    Parameters
-    ----------
-    net :
-        The neural network model to be evaluated.
-    env :
-        The environment in which the network will be evaluated.
-    num_trials : int
-        The number of trials for evaluation.
-    DEVICE :
-        The device to be used for computation.
-
-    Returns
-    -------
-    ------------------.
-
-    """
-    # Since we will not train the network anymore, we can turn off the gradient
-    # computation. The most common way to do this is to use the context manager
-    # torch.no_grad() as follows:
-    with torch.no_grad():
-        net = Net(input_size=TRAINING_KWARGS['net_kwargs']['input_size'],
-                  hidden_size=TRAINING_KWARGS['net_kwargs']['hidden_size'],
-                  output_size=TRAINING_KWARGS['net_kwargs']['action_size'])
-
-        net = net.to(DEVICE)  # pass to GPU for running forwards steps
-        
-        
-        state_dict = torch.load(get_modelpath(TASK) / 'net.pth')
-        print('state dict:', state_dict['vanilla.weight_ih_l0'])
-        # load the trained network's weights from the saved file
-        net.load_state_dict(torch.load(get_modelpath(TASK) / 'net.pth'))
-
-        # empty lists / dataframe to store activity, choices, and trial
-        # inforation
-        activity = list()
-        obs = list()
-        actions = list()
-        gt = list()
-        info = pd.DataFrame()
-        for i in range(num_trials):
-            # create new trial
-            env.new_trial()
-            # read out the inputs in that trial
-            inputs = env.ob[:, np.newaxis, np.newaxis]
-            inputs = torch.from_numpy(inputs).type(torch.float)
-            # as before you can print the shapes of the variables to understand
-            # what they are and how to use them
-            # do this for the rest of the variables as you build the code
-            if i == 0:
-                print('Shape of inputs: ' + str(inputs.shape))
-            # INSTRUCTION 7: get the network's prediction for the current input
-            action_pred, hidden = net(inputs)
-            action_pred = torch.nn.functional.softmax(action_pred, dim=2)
-            action_pred = action_pred.detach().numpy()
-
-            # INSTRUCTION 8: get the network's choice.
-            # Take into account the shape of action_pred. Remember that the
-            # network makes a prediction for each time step in the trial.
-            # Which is the prediction we really care about when evaluating the
-            # network's performance?
-            actions_trial = np.argmax(action_pred[:, 0], axis=1)
-
-            # INSTRUCTION 9: check if the choice is correct
-            # Again, which is the target we want when evaluating the network's
-            # performance?
-            choice = actions_trial[-1]
-            correct = choice == env.gt[-1]
-
-            # Log trial info
-            trial_info = env.trial
-            trial_info['probs'] = [trial_info['probs']]
-            # write choices and outcome
-            trial_info.update({'correct': correct, 'choice': choice})
-            trial_info = pd.DataFrame(trial_info, index=[0])
-            info = pd.concat([info, trial_info], ignore_index=True)
-
-            # Log activity
-            activity.append(np.array(hidden)[:, 0])
-            # log actions
-            actions.append(actions_trial)
-            gt.append(env.gt)
-
-            # Log the inputs (or observations) received by the network
-            obs.append(env.ob)
-        obs = np.array(equalize_arrays(obs))
-        activity = np.array(equalize_arrays(activity))
-        actions = np.array(equalize_arrays(actions))
-        gt = np.array(equalize_arrays(gt))
-
-        print('Average performance', np.mean(info['correct']))
-        # print stats of the activity: max, min, mean, std
-        print('Activity stats:')
-        print('Max: ' + str(np.max(activity)) +
-              ', Min: ' + str(np.min(activity)) +
-              ', Mean: ' + str(np.mean(activity)) +
-              ', Std: ' + str(np.std(activity)) +
-              ', Shape: ' + str(activity.shape))
-
-        # print the variables in the info dataframe
-        print('Info dataframe:')
-        print(info.head())
-        return activity, obs, actions, gt, info
-
 
 def preprocess_activity(activity):
     silent_idx = np.where(activity.sum(axis=(0, 1)) == 0)[0]
@@ -675,12 +568,24 @@ if __name__ == '__main__':
 
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
 
-    num_neurons = 64
-
-    net_kwargs = {'hidden_size': num_neurons,
+    net_kwargs = {'hidden_size': 64,
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.n+1+1}
-
+    
+    TRAINING_KWARGS['env_kwargs'] = env_kwargs
+    TRAINING_KWARGS['net_kwargs'] = net_kwargs
+    
+    # Save config
+    # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
+    #     json.dump(TRAINING_KWARGS, f)
+    
+    num_periods = 80
+    num_epochs = TRAINING_KWARGS['n_epochs']
+    num_steps_exp =\
+        TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
+    debug = False
+    
+    # TODO: for loop
     net = Net(input_size=net_kwargs['input_size'],
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n)
@@ -689,20 +594,6 @@ if __name__ == '__main__':
     net = net.to(DEVICE)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
-
-    TRAINING_KWARGS['env_kwargs'] = env_kwargs
-    TRAINING_KWARGS['net_kwargs'] = net_kwargs
-
-    # Save config
-    # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
-    #     json.dump(TRAINING_KWARGS, f)
-
-    num_periods = 80
-    num_epochs = TRAINING_KWARGS['n_epochs']
-    # TODO: HERE
-    num_steps_exp =\
-        TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
-    debug = False
 
     mean_perf_list = []
     mean_rew_list = []
@@ -716,6 +607,8 @@ if __name__ == '__main__':
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
         #            'labels': seq_len x batch_size}
+        
+        # TODO: function
         print('period: ', i_per)
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
@@ -727,6 +620,7 @@ if __name__ == '__main__':
 
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
+        # end function
 
         dataset = build_dataset(data)
         if debug:
@@ -746,6 +640,8 @@ if __name__ == '__main__':
         
     plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
                       loss_1st_ep_list)
+    
+    # TODO: save data, seed for net and task (env.seed) 
     
     plot_error(num_periods, error_no_action_list, error_fixation_list, 
               error_2_list, error_3_list)
@@ -770,4 +666,5 @@ if __name__ == '__main__':
 
     # for name, param in net.named_parameters():
     #     print(name, param.shape)
+    
     
