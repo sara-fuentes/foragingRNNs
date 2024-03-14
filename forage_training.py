@@ -46,15 +46,6 @@ TRAINING_KWARGS = {'dt': 100,
                    'TASK': TASK}
 
 
-def get_modelpath(TASK):
-    # Make a local file directories
-    path = Path('.') / 'files'
-    os.makedirs(path, exist_ok=True)
-    path = path / TASK
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
 def get_dataset(TASK, env_kwargs):
     """
     Create neurogym dataset and environment.
@@ -80,13 +71,14 @@ def get_dataset(TASK, env_kwargs):
 
 
 class Net(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, output_size, seed=0):
         super(Net, self).__init__()
 
         self.hidden_size = hidden_size
         # INSTRUCTION 1: build a recurrent neural network with a single
         # recurrent layer and rectified linear units
-        # TODO: set seed for weights for RNN and Linear
+        # set seed for weights
+        torch.manual_seed(seed)
         self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu')
         self.linear = nn.Linear(hidden_size, output_size)
 
@@ -283,7 +275,7 @@ def plot_dataset(dataset, batch=0):
         ax[2*i+1].imshow(labels_b.T, aspect='auto')
 
 
-def plot_task(env_kwargs, data, num_steps):
+def plot_task(env_kwargs, data, num_steps, save_folder=None):
     """
     Parameters
     ----------
@@ -319,9 +311,70 @@ def plot_task(env_kwargs, data, num_steps):
                label='perf')
     ax[3].set_ylabel('Reward')
     ax[3].set_xlabel('Time (ms)')
+    plt.tight_layout()
+    if save_folder is not None:
+        plt.savefig(save_folder + '/task.png')
 
 
-def train_network(num_epochs, net, optimizer, criterion, env, dataset):
+def train_network(num_epochs, num_periods, num_steps_exp,
+                   criterion, env, net_kwargs, env_kwargs, debug=False, seed=0):
+    """
+    """
+    net = Net(input_size=net_kwargs['input_size'],
+              hidden_size=net_kwargs['hidden_size'],
+              output_size=env.action_space.n, seed=seed)
+
+    # Move network to the device (CPU or GPU)
+    net = net.to(DEVICE)
+    optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
+
+    mean_perf_list = []
+    mean_rew_list = []
+    loss_1st_ep_list = []
+    data_list = []
+    error_no_action_list = []
+    error_fixation_list = []
+    error_2_list = []
+    error_3_list = []
+    
+    for i_per in range(num_periods):
+        # dataset = {'inputs':seq_len x batch_size x num_inputs,
+        #            'labels': seq_len x batch_size}
+        print('Period: ', i_per, 'of', num_periods)
+        with torch.no_grad():
+            data = run_agent_in_environment(env=env, net=net,
+                                            num_steps_exp=num_steps_exp)
+            data_list.append(data)
+        if debug:
+            plot_task(env_kwargs=env_kwargs, data=data,
+                      num_steps=num_steps_exp)
+
+        mean_perf_list.append(data['mean_perf'])
+        mean_rew_list.append(data['mean_rew'])
+        # end function
+
+        dataset = build_dataset(data)
+        if debug:
+            plot_dataset(dataset)
+        # Train model with RL data
+        loss_1st_ep = train(num_epochs=num_epochs, dataset=dataset,
+                            net=net, optimizer=optimizer,
+                            criterion=criterion, env=env)
+        loss_1st_ep_list.append(loss_1st_ep)
+        
+        error_dict = compute_error(data)
+        error_no_action_list.append(error_dict['error_no_action'])
+        error_fixation_list.append(error_dict['error_fixation'])
+        error_2_list.append(error_dict['error_2'])        
+        error_3_list.append(error_dict['error_3'])
+    dict = {'mean_perf_list': mean_perf_list, 'mean_rew_list': mean_rew_list,
+            'loss_1st_ep_list': loss_1st_ep_list, 'error_no_action_list': error_no_action_list,
+            'error_fixation_list': error_fixation_list, 'error_2_list': error_2_list,
+            'error_3_list': error_3_list, 'data_list': data_list}
+    return dict, net
+
+
+def train(num_epochs, net, optimizer, criterion, env, dataset):
     """
     Train the neural network.
 
@@ -444,7 +497,7 @@ def plot_activity(activity, obs, actions, gt, config, trial):
 
     plt.tight_layout()
 
-def plot_perf_rew_loss(num_periods, mean_perf, mean_rew, loss_1st_ep):
+def plot_perf_rew_loss(num_periods, mean_perf, mean_rew, loss_1st_ep, save_folder_net):
     """
     Plots mean performance and mean reward as a function of period
 
@@ -469,6 +522,7 @@ def plot_perf_rew_loss(num_periods, mean_perf, mean_rew, loss_1st_ep):
     ax[2].set_xlabel('Period', fontsize=14)
     ax[2].tick_params(axis='both', labelsize=12)
     plt.tight_layout()
+    plt.savefig(save_folder_net + '/perf_rew_loss.png')
 
 def compute_error(data):
     
@@ -499,7 +553,7 @@ def compute_error(data):
     return error_dict
     
 def plot_error(num_periods, error_no_action_list, error_fixation_list,
-              error_2_list, error_3_list):
+              error_2_list, error_3_list, save_folder_net):
     period = range(num_periods)
     f, ax = plt.subplots(nrows=4, sharex=True)
     plt.suptitle('Error', fontsize=16)
@@ -517,44 +571,39 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
     ax[3].tick_params(axis='both', labelsize=12)
     ax[3].set_xlabel('Period', fontsize=14)
     plt.tight_layout()
-    
+    plt.savefig(save_folder_net + '/error.png')
+
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
+    env_seed = 0
+    # create folder to save data based on env seed
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
+    save_folder = main_folder + str(env_seed)
+    
     # Set up the task
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
                       {'ITI': ngym_f.random.TruncExp(200, 100, 300),
-                       'fixation': 200, 'decision': 200}}  # Decision period}
+                       'fixation': 100, 'decision': 100}}  # Decision period}
 
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
     env = pass_reward.PassReward(env)
     env = pass_action.PassAction(env)
+    # set seed
+    env.seed(env_seed)
     num_steps = 400
-
+    
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
 
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
 
     net_kwargs = {'hidden_size': 64,
                   'action_size': env.action_space.n,
-<<<<<<< HEAD
                   'input_size': env.observation_space.shape[0]}
-
-    net = Net(input_size=net_kwargs['input_size'],
-              hidden_size=net_kwargs['hidden_size'],
-              output_size=env.action_space.n)
-
-    # Move network to the device (CPU or GPU)
-    net = net.to(DEVICE)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
-
-=======
-                  'input_size': env.observation_space.n+1+1}
     
->>>>>>> d5280e3bdcbe834c903a1295cc41540fd53d887b
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
     
@@ -562,95 +611,48 @@ if __name__ == '__main__':
     # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
     
-    num_periods = 80
+    num_periods = 100
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
-    
-    # TODO: for loop
-    net = Net(input_size=net_kwargs['input_size'],
-              hidden_size=net_kwargs['hidden_size'],
-              output_size=env.action_space.n)
-
-    # Move network to the device (CPU or GPU)
-    net = net.to(DEVICE)
+    num_networks = 100
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
-
-    mean_perf_list = []
-    mean_rew_list = []
-    loss_1st_ep_list = []
-    data_list = []
-    error_no_action_list = []
-    error_fixation_list = []
-    error_2_list = []
-    error_3_list = []
-    
-    for i_per in range(num_periods):
-        # dataset = {'inputs':seq_len x batch_size x num_inputs,
-        #            'labels': seq_len x batch_size}
+    # train several networks with different seeds
+    for net in range(num_networks):
+        seed = np.random.randint(0, 10000)
+        # create folder to save data based on net seed
+        save_folder_net = save_folder + '/' + str(seed)
+        # create folder to save data based on net seed
+        os.makedirs(save_folder_net, exist_ok=True)
         
-        # TODO: function
-        print('period: ', i_per)
-        with torch.no_grad():
-            data = run_agent_in_environment(env=env, net=net,
-                                            num_steps_exp=num_steps_exp)
-            data_list.append(data)
-        if debug:
-            plot_task(env_kwargs=env_kwargs, data=data,
-                      num_steps=num_steps_exp)
-
-        mean_perf_list.append(data['mean_perf'])
-        mean_rew_list.append(data['mean_rew'])
-        # end function
-
-        dataset = build_dataset(data)
-        if debug:
-            plot_dataset(dataset)
-        # Train model with RL data
-        loss_1st_ep = train_network(num_epochs=num_epochs, dataset=dataset,
-                                    net=net, optimizer=optimizer,
-                                    criterion=criterion, env=env)
-        loss_1st_ep_list.append(loss_1st_ep)
+        d_bh, net = train_network(num_epochs=num_epochs, num_periods=num_periods,
+                                  num_steps_exp=num_steps_exp, criterion=criterion,
+                                  env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
+                                  debug=debug, seed=seed)
+        # save data
+        np.save(save_folder_net + '/data.npz', d_bh)
+        # save net
+        torch.save(net, save_folder_net + '/net.pth')
+            
+        # get data from d_bh
+        mean_perf_list = d_bh['mean_perf_list']
+        mean_rew_list = d_bh['mean_rew_list']
+        loss_1st_ep_list = d_bh['loss_1st_ep_list']
+        error_no_action_list = d_bh['error_no_action_list']
+        error_fixation_list = d_bh['error_fixation_list']
+        error_2_list = d_bh['error_2_list']
+        error_3_list = d_bh['error_3_list']
+        plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
+                        loss_1st_ep_list, save_folder_net)
         
-        error_dict = compute_error(data)
-        error_no_action_list.append(error_dict['error_no_action'])
-        error_fixation_list.append(error_dict['error_fixation'])
-        error_2_list.append(error_dict['error_2'])        
-        error_3_list.append(error_dict['error_3'])  
-    
-        
-    plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
-                      loss_1st_ep_list)
-    
-    # TODO: save data, seed for net and task (env.seed) 
-    
-    plot_error(num_periods, error_no_action_list, error_fixation_list, 
-              error_2_list, error_3_list)
-    plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
+        plot_error(num_periods, error_no_action_list, error_fixation_list, 
+                error_2_list, error_3_list, save_folder_net)
+        data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
+        plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
+                   save_folder=save_folder_net)
+        plt.close('all')
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
     # with open(get_modelpath(TASK) / 'config.json') as f:
     #     config = json.load(f)
-
-    # Environment
-    env = gym.make(TASK, **TRAINING_KWARGS['env_kwargs'])
-    env.reset(no_step=True)  # this is to initialize the environment
-
-    num_trials = 1000
-    # evaluate network
-    activity, obs, actions, gt, info = evaluate_network(net=net, env=env,
-                                                        num_trials=num_trials)
-    clean_minmax_activity = preprocess_activity(activity)
-    plot_activity(activity=clean_minmax_activity, obs=obs, actions=actions,
-                  gt=gt, trial=0)
-
-
-    # for name, param in net.named_parameters():
-    #     print(name, param.shape)
-<<<<<<< HEAD
-=======
-    
-    
->>>>>>> d5280e3bdcbe834c903a1295cc41540fd53d887b
