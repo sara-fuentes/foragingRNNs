@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Thu Mar 14 15:54:25 2024
+
+@author: saraf
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Thu Feb  8 22:20:23 2024
 
 @author: saraf
@@ -8,7 +15,6 @@ Created on Thu Feb  8 22:20:23 2024
 import torch.nn as nn
 import torch
 import ngym_foraging as ngym_f
-from ngym_foraging.wrappers import pass_reward, pass_action
 import gym
 import sklearn.discriminant_analysis as sklda
 import sklearn.model_selection as sklms
@@ -219,8 +225,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         if net is None:
             action = env.action_space.sample()
         else:
-            ob_tensor = torch.tensor([ob], dtype=torch.float32)
-            ob_tensor = ob_tensor.unsqueeze(0)
+            ob_tensor = torch.tensor([ob, rew, action], dtype=torch.float32)
+            ob_tensor = ob_tensor.unsqueeze(0).unsqueeze(0)
             action_probs, hidden = net(x=ob_tensor, hidden=hidden)
             # Assuming `net` returns action probabilities
             action_probs = torch.nn.functional.softmax(action_probs, dim=2)
@@ -260,9 +266,31 @@ def build_dataset(data):
     # OBSERVATION
     ob_array = np.array(data['ob'])
     # reshape
-    inputs = ob_array.reshape(TRAINING_KWARGS['batch_size'],
-                              TRAINING_KWARGS['seq_len'], 3)
-        
+    ob_array = ob_array.reshape(TRAINING_KWARGS['batch_size'],
+                                TRAINING_KWARGS['seq_len'])
+    # REWARD
+    rew_array = np.array(data['rew_mat'])
+    # insert zero at the beginning of each row
+    rew_array = np.insert(rew_array, 0, 0)
+    # remove the last element of each row
+    rew_array = rew_array[:-1]
+    # reshape
+    rew_array = rew_array.reshape(TRAINING_KWARGS['batch_size'],
+                                  TRAINING_KWARGS['seq_len'])
+    
+    # ACTION
+    action_array = np.array(data['actions'])
+    # insert a zero at the beginning of each row
+    action_array = np.insert(action_array, 0, 0)
+    # remove the last element of each row
+    action_array = action_array[:-1]
+    # reshape
+    action_array = action_array.reshape(TRAINING_KWARGS['batch_size'],
+                                        TRAINING_KWARGS['seq_len'])
+    
+    # inputs
+    inputs = np.stack((ob_array, rew_array, action_array), axis=2)
+    
     # labels
     labels = np.array(data['gt'])
     # reshape
@@ -391,6 +419,8 @@ def train_network(num_epochs, net, optimizer, criterion, env, dataset):
             # torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
             
     return loss_1st_ep
+   
+    
 
 def preprocess_activity(activity):
     silent_idx = np.where(activity.sum(axis=(0, 1)) == 0)[0]
@@ -521,40 +551,19 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    # Set up the task
+    
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
                       {'ITI': ngym_f.random.TruncExp(200, 100, 300),
                        'fixation': 200, 'decision': 200}}  # Decision period}
-
+        
     # call function to sample
-    env = gym.make(TASK, **env_kwargs)
-    env = pass_reward.PassReward(env)
-    env = pass_action.PassAction(env)
-    num_steps = 400
-
-    data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
-
-    plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
-
+    dataset, env = get_dataset(TASK=TASK, env_kwargs=env_kwargs)
+    
     net_kwargs = {'hidden_size': 64,
                   'action_size': env.action_space.n,
-<<<<<<< HEAD
-                  'input_size': env.observation_space.shape[0]}
-
-    net = Net(input_size=net_kwargs['input_size'],
-              hidden_size=net_kwargs['hidden_size'],
-              output_size=env.action_space.n)
-
-    # Move network to the device (CPU or GPU)
-    net = net.to(DEVICE)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
-
-=======
                   'input_size': env.observation_space.n+1+1}
     
->>>>>>> d5280e3bdcbe834c903a1295cc41540fd53d887b
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
     
@@ -575,9 +584,10 @@ if __name__ == '__main__':
 
     # Move network to the device (CPU or GPU)
     net = net.to(DEVICE)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
-
+    
+    net.load_state_dict(torch.load('C:/Users/saraf/OneDrive/Documentos/'
+                                   'IDIBAPS/foraging RNNs/nets/net.pth'))
+    
     mean_perf_list = []
     mean_rew_list = []
     loss_1st_ep_list = []
@@ -587,70 +597,21 @@ if __name__ == '__main__':
     error_2_list = []
     error_3_list = []
     
-    for i_per in range(num_periods):
-        # dataset = {'inputs':seq_len x batch_size x num_inputs,
-        #            'labels': seq_len x batch_size}
-        
-        # TODO: function
-        print('period: ', i_per)
-        with torch.no_grad():
-            data = run_agent_in_environment(env=env, net=net,
-                                            num_steps_exp=num_steps_exp)
-            data_list.append(data)
-        if debug:
-            plot_task(env_kwargs=env_kwargs, data=data,
-                      num_steps=num_steps_exp)
+    data = run_agent_in_environment(env=env, net=net,
+                                    num_steps_exp=num_steps_exp)
+    
+    mean_perf_list.append(data['mean_perf'])
+    mean_rew_list.append(data['mean_rew'])
+    # end function
 
-        mean_perf_list.append(data['mean_perf'])
-        mean_rew_list.append(data['mean_rew'])
-        # end function
-
-        dataset = build_dataset(data)
-        if debug:
-            plot_dataset(dataset)
-        # Train model with RL data
-        loss_1st_ep = train_network(num_epochs=num_epochs, dataset=dataset,
-                                    net=net, optimizer=optimizer,
-                                    criterion=criterion, env=env)
-        loss_1st_ep_list.append(loss_1st_ep)
-        
-        error_dict = compute_error(data)
-        error_no_action_list.append(error_dict['error_no_action'])
-        error_fixation_list.append(error_dict['error_fixation'])
-        error_2_list.append(error_dict['error_2'])        
-        error_3_list.append(error_dict['error_3'])  
+    dataset = build_dataset(data)
     
-        
-    plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
-                      loss_1st_ep_list)
+    error_dict = compute_error(data)
+    error_no_action_list.append(error_dict['error_no_action'])
+    error_fixation_list.append(error_dict['error_fixation'])
+    error_2_list.append(error_dict['error_2'])        
+    error_3_list.append(error_dict['error_3'])  
     
-    # TODO: save data, seed for net and task (env.seed) 
-    
-    plot_error(num_periods, error_no_action_list, error_fixation_list, 
-              error_2_list, error_3_list)
+    # plot_error(num_periods, error_no_action_list, error_fixation_list, 
+    #           error_2_list, error_3_list)
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp)
-    # load configuration file - we might have run the training on the cloud
-    # and might now open the results locally
-    # with open(get_modelpath(TASK) / 'config.json') as f:
-    #     config = json.load(f)
-
-    # Environment
-    env = gym.make(TASK, **TRAINING_KWARGS['env_kwargs'])
-    env.reset(no_step=True)  # this is to initialize the environment
-
-    num_trials = 1000
-    # evaluate network
-    activity, obs, actions, gt, info = evaluate_network(net=net, env=env,
-                                                        num_trials=num_trials)
-    clean_minmax_activity = preprocess_activity(activity)
-    plot_activity(activity=clean_minmax_activity, obs=obs, actions=actions,
-                  gt=gt, trial=0)
-
-
-    # for name, param in net.named_parameters():
-    #     print(name, param.shape)
-<<<<<<< HEAD
-=======
-    
-    
->>>>>>> d5280e3bdcbe834c903a1295cc41540fd53d887b
