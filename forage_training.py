@@ -276,7 +276,7 @@ def plot_dataset(dataset, batch=0):
         ax[2*i+1].imshow(labels_b.T, aspect='auto')
 
 
-def plot_task(env_kwargs, data, num_steps, mean_perf=-1, save_folder=None):
+def plot_task(env_kwargs, data, num_steps, save_folder=None):
     """
     Parameters
     ----------
@@ -296,9 +296,9 @@ def plot_task(env_kwargs, data, num_steps, mean_perf=-1, save_folder=None):
                          dpi=150, sharex=True)
 
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['ob'], '-+', label='Fixation')
+               data['ob'], '-+')
     ax[0].set_ylabel('Inputs')
-    ax[0].legend()
+    ax[0].legend(['Fixation', 'Reward', 'Choice'])
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
                data['gt'], label='Targets', color='k')
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
@@ -308,6 +308,10 @@ def plot_task(env_kwargs, data, num_steps, mean_perf=-1, save_folder=None):
     ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['perf'],
                label='perf')
     # set title with average performance
+    perf = np.array(data['perf'])
+    perf = perf[perf != -1]
+    mean_perf = np.mean(perf)
+    mean_perf_list.append(mean_perf)
     ax[2].set_title('Mean performance: ' + str(np.round(mean_perf, 2)))
     ax[2].set_ylabel('Performance')
     ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['rew_mat'],
@@ -579,7 +583,7 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 0
+    env_seed = 1
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
