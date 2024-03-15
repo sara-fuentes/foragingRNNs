@@ -234,7 +234,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         else:
             perf.append(-1)
             
-    print('------------')            
+    print('------------') 
+    perf = np.array(perf)           
     mean_perf = np.mean(perf[perf != -1])
     print('mean performance: ', mean_perf)
     mean_rew = np.mean(rew_mat)
@@ -621,7 +622,7 @@ if __name__ == '__main__':
     num_networks = 100
     criterion = nn.CrossEntropyLoss()
     # train several networks with different seeds
-    for net in range(num_networks):
+    for i_net in range(num_networks):
         seed = np.random.randint(0, 10000)
         # create folder to save data based on net seed
         save_folder_net = save_folder + '/' + str(seed)
@@ -654,7 +655,6 @@ if __name__ == '__main__':
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
                    save_folder=save_folder_net)
         plt.show()
-        asdasd
         plt.close('all')
     
     # load configuration file - we might have run the training on the cloud

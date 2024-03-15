@@ -96,8 +96,8 @@ if __name__ == '__main__':
     # train several networks with different seeds
     f, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
     mean_perf_list = []
-    for net in range(num_networks):
-        seed = seeds[net]
+    for i_net in range(num_networks):
+        seed = seeds[i_net]
         
         # load data
         save_folder_net = save_folder + '/' + str(seed)
@@ -115,7 +115,7 @@ if __name__ == '__main__':
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
-        if net == 0:
+        if i_net == 0:
             ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
                          save_folder=save_folder_net)
         # plot data
