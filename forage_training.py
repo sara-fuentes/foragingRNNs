@@ -311,7 +311,6 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     perf = np.array(data['perf'])
     perf = perf[perf != -1]
     mean_perf = np.mean(perf)
-    mean_perf_list.append(mean_perf)
     ax[2].set_title('Mean performance: ' + str(np.round(mean_perf, 2)))
     ax[2].set_ylabel('Performance')
     ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['rew_mat'],
@@ -590,11 +589,14 @@ if __name__ == '__main__':
     save_folder = main_folder + str(env_seed)
     
     # Set up the task
+    mean_ITI = 200
+    fix_dur = 100
+    dec_dur = 100
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(200, 100, 300),
-                       'fixation': 100, 'decision': 100}}  # Decision period}
-
+                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, 300), # mean, min, max
+                       'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
+    TRAINING_KWARGS['classes_weights'] = [TRAINING_KWARGS['dt']/(mean_ITI), TRAINING_KWARGS['dt']/fix_dur, 2, 2]
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
     env = pass_reward.PassReward(env)
@@ -624,7 +626,7 @@ if __name__ == '__main__':
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
     num_networks = 100
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weights=TRAINING_KWARGS['classes_weights'])
     # train several networks with different seeds
     for i_net in range(num_networks):
         seed = np.random.randint(0, 10000)

@@ -128,6 +128,8 @@ if __name__ == '__main__':
     ax[1].hist(mean_perf_list, bins=20)
     ax[1].set_xlabel('Mean performance')
     ax[1].set_ylabel('Frequency')
+    # save figure
+    f.savefig(save_folder + '/performance.png')
     plt.show()
         # get data from d_bh
 
