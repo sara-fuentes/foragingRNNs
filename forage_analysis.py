@@ -117,7 +117,7 @@ if __name__ == '__main__':
         mean_perf_list.append(mean_perf)
         if i_net == 0:
             ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
-                         save_folder=save_folder_net)
+                         save_folder=save_folder_net, mean_perf=mean_perf)
         # plot data
         # get mean performance from data
         mean_performance = data_training.item()['mean_perf_list']
