@@ -232,10 +232,10 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         if info.get('new_trial', False):
             perf.append(info.get('performance', None))
         else:
-            perf.append(0)
+            perf.append(-1)
             
     print('------------')            
-    mean_perf = np.mean(perf)
+    mean_perf = np.mean(perf[perf != -1])
     print('mean performance: ', mean_perf)
     mean_rew = np.mean(rew_mat)
     print('mean reward: ', mean_rew)
@@ -275,7 +275,7 @@ def plot_dataset(dataset, batch=0):
         ax[2*i+1].imshow(labels_b.T, aspect='auto')
 
 
-def plot_task(env_kwargs, data, num_steps, save_folder=None):
+def plot_task(env_kwargs, data, num_steps, mean_perf=-1, save_folder=None):
     """
     Parameters
     ----------
@@ -306,6 +306,8 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     ax[1].legend()
     ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['perf'],
                label='perf')
+    # set title with average performance
+    ax[2].set_title('Mean performance: ' + str(np.round(mean_perf, 2)))
     ax[2].set_ylabel('Performance')
     ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['rew_mat'],
                label='perf')
@@ -608,9 +610,9 @@ if __name__ == '__main__':
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
     
     # Save config
-    # with open(get_modelpath(TASK) / 'config.json', 'w') as f:
+    # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
-    
+    # asdasdasd
     num_periods = 100
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
@@ -651,7 +653,10 @@ if __name__ == '__main__':
         data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
                    save_folder=save_folder_net)
+        plt.show()
+        asdasd
         plt.close('all')
+    
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
     # with open(get_modelpath(TASK) / 'config.json') as f:
