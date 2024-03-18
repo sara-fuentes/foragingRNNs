@@ -586,21 +586,19 @@ if __name__ == '__main__':
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
-    save_folder = main_folder + str(env_seed)
-    # create folder to save data based on env seed
-    os.makedirs(save_folder, exist_ok=True)
     # Set up the task
-    w_factor = 0.1
+    w_factor = 0.5
     mean_ITI = 200
     max_ITI = 300
-    fix_dur = 200
+    fix_dur = 100
     dec_dur = 100
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
                       {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
                        'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
-    TRAINING_KWARGS['classes_weights'] = [1, 1, 1, 1] # ]torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
-                                                        #  w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
+    TRAINING_KWARGS['classes_weights'] =\
+         torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI), w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
+    # torch.tensor([1., 1., 1., 1.]) 
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
     env = pass_reward.PassReward(env)
@@ -619,6 +617,14 @@ if __name__ == '__main__':
     
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
+    # create folder to save data based on w_factor, mean_ITI, max_ITI, fix_dur, dec_dur and the env seed
+    save_folder = main_folder + 'w_factor_' + str(w_factor) + '_mean_ITI_' + str(mean_ITI)\
+          + '_max_ITI_' + str(max_ITI) + '_fix_dur_' + str(fix_dur) + '_dec_dur_' + str(dec_dur)\
+          + '_' + str(env_seed)
+    # create folder to save data based on env seed
+    os.makedirs(save_folder, exist_ok=True)
+
+
     # Save config as npz
     np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
     # Save config
