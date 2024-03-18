@@ -298,16 +298,16 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
                          dpi=150, sharex=True)
 
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['ob'], '-+')
+               data['ob'][:num_steps], '-+')
     ax[0].set_ylabel('Inputs')
     ax[0].legend(['Fixation', 'Reward', 'Choice'])
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['gt'], label='Targets', color='k')
+               data['gt'][:num_steps], label='Targets', color='k')
     ax[1].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
-               data['actions'], label='Choice', linestyle='--', marker='+')
+               data['actions'][:num_steps], label='Choice', linestyle='--', marker='+')
     ax[1].set_ylabel('Actions / Targets')
     ax[1].legend()
-    ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['perf'],
+    ax[2].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['perf'][:num_steps],
                label='perf')
     # set title with average performance
     perf = np.array(data['perf'])
@@ -315,7 +315,7 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     mean_perf = np.mean(perf)
     ax[2].set_title('Mean performance: ' + str(np.round(mean_perf, 2)))
     ax[2].set_ylabel('Performance')
-    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['rew_mat'],
+    ax[3].plot(np.arange(1, num_steps+1)*env_kwargs['dt'], data['rew_mat'][:num_steps],
                label='perf')
     ax[3].set_ylabel('Reward')
     ax[3].set_xlabel('Time (ms)')
@@ -623,6 +623,7 @@ if __name__ == '__main__':
     save_folder = main_folder + 'w_factor_' + str(w_factor) + '_mean_ITI_' + str(mean_ITI)\
           + '_max_ITI_' + str(max_ITI) + '_fix_dur_' + str(fix_dur) + '_dec_dur_' + str(dec_dur)\
           + '_' + str(env_seed)
+
     # create folder to save data based on env seed
     os.makedirs(save_folder, exist_ok=True)
 
@@ -633,10 +634,11 @@ if __name__ == '__main__':
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
     # asdasdasd
-    num_periods = 1000
+    num_periods = 100
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
+    num_steps_plot = 100
     debug = False
     num_networks = 100
     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
@@ -673,7 +675,7 @@ if __name__ == '__main__':
         plot_error(num_periods, error_no_action_list, error_fixation_list, 
                 error_2_list, error_3_list, save_folder_net)
         data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
-        plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
+        plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                    save_folder=save_folder_net)
         # plt.show()
         plt.close('all')
