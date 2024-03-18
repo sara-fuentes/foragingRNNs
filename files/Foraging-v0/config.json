@@ -1,1 +1,0 @@
-{"dt": 100, "lr": 0.01, "n_epochs": 2000, "batch_size": 16, "seq_len": 100, "TASK": "Foraging-v0", "env_kwargs": {"dt": 100, "probs": 

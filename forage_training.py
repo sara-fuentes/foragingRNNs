@@ -584,12 +584,12 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 2
+    env_seed = 1
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-    w_factor = 0.01
+    w_factor = 0.5
     mean_ITI = 200
     max_ITI = 300
     fix_dur = 100
@@ -599,8 +599,7 @@ if __name__ == '__main__':
                       {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
                        'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
     TRAINING_KWARGS['classes_weights'] =\
-         torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI), w_factor*
-                       TRAINING_KWARGS['dt']/fix_dur, 2.0, 2.0])
+         torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI), w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
     # torch.tensor([1., 1., 1., 1.]) 
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
@@ -639,7 +638,7 @@ if __name__ == '__main__':
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
-    num_networks = 2
+    num_networks = 100
     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
     # train several networks with different seeds
     for i_net in range(num_networks):
