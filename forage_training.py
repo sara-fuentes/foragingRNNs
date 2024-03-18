@@ -201,6 +201,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     gt = []
     perf = []
     rew_mat = []
+    iti = []
     rew = 0
     action = 0
     ob = env.reset()
@@ -231,6 +232,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             rew_mat.append(rew)
         if info.get('new_trial', False):
             perf.append(info.get('performance', None))
+            iti.append(np.sum(env.gt == 0))
         else:
             perf.append(-1)
             
@@ -244,7 +246,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     data = {'ob': np.array(inputs[:-1]).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
             'rew_mat': rew_mat, 'mean_perf': mean_perf,
-            'mean_rew': mean_rew}
+            'mean_rew': mean_rew, 'iti': iti}
     return data
 
 
@@ -632,7 +634,7 @@ if __name__ == '__main__':
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
     # asdasdasd
-    num_periods = 100
+    num_periods = 1000
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
@@ -674,7 +676,7 @@ if __name__ == '__main__':
         data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
                    save_folder=save_folder_net)
-        plt.show()
+        # plt.show()
         plt.close('all')
     
     # load configuration file - we might have run the training on the cloud
