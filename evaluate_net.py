@@ -27,7 +27,7 @@ if __name__ == '__main__':
     num_neurons = 64
 
     env = gym.make(TASK, **TRAINING_KWARGS['env_kwargs'])
-    
+
     net_kwargs = {'hidden_size': num_neurons,
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.n+1+1}
@@ -40,11 +40,6 @@ if __name__ == '__main__':
     # call function to sample
     dataset, env = ft.get_dataset(TASK=TASK, env_kwargs=env_kwargs)
 
-    net = ft.Net(input_size=TRAINING_KWARGS['net_kwargs']['input_size'],
-            hidden_size=TRAINING_KWARGS['net_kwargs']['hidden_size'],
-            output_size=TRAINING_KWARGS['net_kwargs']['action_size'])
-    
-    
     net = ft.Net(input_size=net_kwargs['input_size'],
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n)

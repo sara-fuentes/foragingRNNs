@@ -1,0 +1,1 @@
+{"dt": 100, "lr": 0.01, "n_epochs": 2000, "batch_size": 16, "seq_len": 100, "envid": "PerceptualDecisionMaking-v0", "env_kwargs": {"dt": 100, "timing": {"fixation": 300, "stimulus": 1000, "delay": 0, "decision": 300}, "sigma": 2, "dim_ring": 2}, "net_kwargs": {"hidden_size": 64, "action_size": 3, "input_size": 3}}
