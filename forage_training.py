@@ -587,16 +587,20 @@ if __name__ == '__main__':
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
     save_folder = main_folder + str(env_seed)
-    
+    # create folder to save data based on env seed
+    os.makedirs(save_folder, exist_ok=True)
     # Set up the task
+    w_factor = 0.1
     mean_ITI = 200
-    fix_dur = 100
+    max_ITI = 300
+    fix_dur = 200
     dec_dur = 100
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, 300), # mean, min, max
+                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
                        'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
-    TRAINING_KWARGS['classes_weights'] = [TRAINING_KWARGS['dt']/(mean_ITI), TRAINING_KWARGS['dt']/fix_dur, 2, 2]
+    TRAINING_KWARGS['classes_weights'] = [1, 1, 1, 1] # ]torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
+                                                        #  w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
     env = pass_reward.PassReward(env)
@@ -615,7 +619,8 @@ if __name__ == '__main__':
     
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
-    
+    # Save config as npz
+    np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
     # Save config
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
@@ -626,7 +631,7 @@ if __name__ == '__main__':
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
     num_networks = 100
-    criterion = nn.CrossEntropyLoss(weights=TRAINING_KWARGS['classes_weights'])
+    criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
     # train several networks with different seeds
     for i_net in range(num_networks):
         seed = np.random.randint(0, 10000)
@@ -639,8 +644,10 @@ if __name__ == '__main__':
                                   num_steps_exp=num_steps_exp, criterion=criterion,
                                   env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
                                   debug=debug, seed=seed)
-        # save data
-        np.save(save_folder_net + '/data.npz', d_bh)
+        # save data as npz
+        # HINT: use npy?
+        np.savez(save_folder_net + '/data.npz', **d_bh)
+
         # save net
         torch.save(net, save_folder_net + '/net.pth')
             
