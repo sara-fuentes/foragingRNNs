@@ -61,11 +61,20 @@ class Net(nn.Module):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 0
+    env_seed = 1
+    w_factor = 0.01
+    mean_ITI = 200
+    max_ITI = 300
+    fix_dur = 100
+    dec_dur = 100
+
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
-    save_folder = main_folder + str(env_seed)
+    save_folder = main_folder + 'w_factor_' + str(w_factor) + '_mean_ITI_' + str(mean_ITI)\
+          + '_max_ITI_' + str(max_ITI) + '_fix_dur_' + str(fix_dur) + '_dec_dur_' + str(dec_dur)\
+          + '_' + str(env_seed)
+
     # get seeds from folders in save_folder
     seeds = [int(f) for f in os.listdir(save_folder) if os.path.isdir(save_folder + '/' + f)]
     # Set up the task
@@ -91,7 +100,7 @@ if __name__ == '__main__':
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     debug = False
-    num_networks = 99
+    num_networks = len(seeds)
 
     # train several networks with different seeds
     f, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
@@ -101,7 +110,7 @@ if __name__ == '__main__':
         
         # load data
         save_folder_net = save_folder + '/' + str(seed)
-        data_training = np.load(save_folder_net + '/data.npz.npy', allow_pickle=True)
+        data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
         # load net
         net = Net(input_size=net_kwargs['input_size'],
                   hidden_size=net_kwargs['hidden_size'],
@@ -120,8 +129,11 @@ if __name__ == '__main__':
                          save_folder=save_folder_net)
         # plot data
         # get mean performance from data
-        mean_performance = data_training.item()['mean_perf_list']
+        mean_performance = data_training['mean_perf_list']
         ax[0].plot(mean_performance, label='Net ' + str(net))
+        # smooth mean performance
+        mean_performance_smooth = np.convolve(mean_performance, np.ones(10)/10, mode='valid')
+        ax[0].plot(mean_performance_smooth, label='Net ' + str(net) + ' smooth')
         ax[0].set_xlabel('Epochs')
         ax[0].set_ylabel('Mean performance')
     # histogram of mean performance
