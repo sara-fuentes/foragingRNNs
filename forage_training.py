@@ -585,14 +585,14 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
 def plot_performace_by_iti(data):
     # boxplot of performance by ITI
     # list of unique ITIs
-    iti = np.array(data['iti'])
-    iti_list = np.unique(iti)
+    iti_mat = np.array(data['iti'])
+    iti_list = np.unique(iti_mat)
     # list of performances for each unique ITI
     perf_list = []
     for iti in iti_list:
         perf = np.array(data['perf'])
         perf = perf[perf != -1]
-        perf_list.append((perf[iti == iti]).reshape(-1))
+        perf_list.append((perf[iti_mat == iti]).reshape(-1))
     f, ax = plt.subplots()
     ax.boxplot(perf_list) 
 
@@ -649,7 +649,7 @@ if __name__ == '__main__':
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
     # asdasdasd
-    num_periods = 100
+    num_periods = 10
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
