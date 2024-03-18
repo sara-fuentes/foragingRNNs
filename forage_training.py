@@ -581,15 +581,31 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
     plt.tight_layout()
     plt.savefig(save_folder_net + '/error.png')
 
+
+def plot_performace_by_iti(data):
+    # boxplot of performance by ITI
+    # list of unique ITIs
+    iti = np.array(data['iti'])
+    iti_list = np.unique(iti)
+    # list of performances for each unique ITI
+    perf_list = []
+    for iti in iti_list:
+        perf = np.array(data['perf'])
+        perf = perf[perf != -1]
+        perf_list.append((perf[iti == iti]).reshape(-1))
+    f, ax = plt.subplots()
+    ax.boxplot(perf_list) 
+
+
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 1
+    env_seed = 3
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-    w_factor = 0.01
+    w_factor = 0.5
     mean_ITI = 200
     max_ITI = 300
     fix_dur = 100
@@ -640,7 +656,7 @@ if __name__ == '__main__':
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     num_steps_plot = 100
     debug = False
-    num_networks = 100
+    num_networks = 1
     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
     # train several networks with different seeds
     for i_net in range(num_networks):
@@ -677,8 +693,10 @@ if __name__ == '__main__':
         data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                    save_folder=save_folder_net)
+        plot_performace_by_iti(data)
         # plt.show()
-        plt.close('all')
+        # plt.close('all')
+
     
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
