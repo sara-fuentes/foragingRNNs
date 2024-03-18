@@ -587,12 +587,13 @@ def plot_performace_by_iti(data):
     # list of unique ITIs
     iti_mat = np.array(data['iti'])
     iti_list = np.unique(iti_mat)
+    perf_mat = np.array(data['perf'])
+    perf_mat = perf_mat[perf_mat != -1]
+    
     # list of performances for each unique ITI
     perf_list = []
     for iti in iti_list:
-        perf = np.array(data['perf'])
-        perf = perf[perf != -1]
-        perf_list.append((perf[iti_mat == iti]).reshape(-1))
+        perf_list.append(perf_mat[iti_mat == iti])
     f, ax = plt.subplots()
     ax.boxplot(perf_list) 
 
