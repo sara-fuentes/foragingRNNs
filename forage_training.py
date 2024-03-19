@@ -33,7 +33,6 @@ sys.path.append('C:/Users/saraf')
 # import torch and neural network modules to build RNNs
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-PATH = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/entire_net.pth'
 
 # name of the task on the neurogym library
 TASK = 'ForagingBlocks-v0'
@@ -339,7 +338,6 @@ def train_network(num_epochs, num_periods, num_steps_exp,
     mean_perf_list = []
     mean_rew_list = []
     loss_1st_ep_list = []
-    data_list = []
     error_no_action_list = []
     error_fixation_list = []
     error_2_list = []
@@ -352,11 +350,13 @@ def train_network(num_epochs, num_periods, num_steps_exp,
         with torch.no_grad():
             data = run_agent_in_environment(env=env, net=net,
                                             num_steps_exp=num_steps_exp)
-            data_list.append(data)
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
-
+        # transform data to a pandas dataframe. 
+        # First, transform variables already existing in data
+        # Transform means: change the name, shape, values and type of the variable
+        df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
         # end function
@@ -378,7 +378,7 @@ def train_network(num_epochs, num_periods, num_steps_exp,
     dict = {'mean_perf_list': mean_perf_list, 'mean_rew_list': mean_rew_list,
             'loss_1st_ep_list': loss_1st_ep_list, 'error_no_action_list': error_no_action_list,
             'error_fixation_list': error_fixation_list, 'error_2_list': error_2_list,
-            'error_3_list': error_3_list, 'data_list': data_list}
+            'error_3_list': error_3_list}
     return dict, net
 
 
@@ -582,7 +582,7 @@ def plot_error(num_periods, error_no_action_list, error_fixation_list,
     plt.savefig(save_folder_net + '/error.png')
 
 
-def plot_performace_by_iti(data):
+def plot_performace_by_iti(data, save_folder):
     # boxplot of performance by ITI
     # list of unique ITIs
     iti_mat = np.array(data['iti'])
@@ -591,22 +591,35 @@ def plot_performace_by_iti(data):
     perf_mat = perf_mat[perf_mat != -1]
     
     # list of performances for each unique ITI
-    perf_list = []
+    mean_perf = []
+    ste_perf = []
     for iti in iti_list:
-        perf_list.append(perf_mat[iti_mat == iti])
-    f, ax = plt.subplots()
-    ax.boxplot(perf_list) 
+        mean_perf.append(np.mean(perf_mat[iti_mat == iti]))
+        ste_perf.append(np.std(perf_mat[iti_mat == iti])/np.sqrt(np.sum(iti_mat == iti)))
+    f, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 4), dpi=150)
+    ax[0].errorbar(iti_list, mean_perf, yerr=ste_perf, fmt='o')
+    ax[0].set_xlabel('ITI')
+    ax[0].set_ylabel('Performance')
+    # plot bar plot with number of trials for each ITI
+    ax[1].bar(iti_list, [np.sum(iti_mat == iti) for iti in iti_list])
+    ax[1].set_xlabel('ITI')
+    ax[1].set_ylabel('Number of trials')
+    plt.tight_layout()
+    plt.savefig(save_folder + '/perf_iti.png')
+
 
 
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
     env_seed = 3
+    num_periods = 100
+    TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-    w_factor = 0.5
+    w_factor = 0.1
     mean_ITI = 200
     max_ITI = 300
     fix_dur = 100
@@ -625,21 +638,17 @@ if __name__ == '__main__':
     # set seed
     env.seed(env_seed)
     num_steps = 400
-    
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
-
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
-
     net_kwargs = {'hidden_size': 64,
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.shape[0]}
     
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
-    # create folder to save data based on w_factor, mean_ITI, max_ITI, fix_dur, dec_dur and the env seed
-    save_folder = main_folder + 'w_factor_' + str(w_factor) + '_mean_ITI_' + str(mean_ITI)\
-          + '_max_ITI_' + str(max_ITI) + '_fix_dur_' + str(fix_dur) + '_dec_dur_' + str(dec_dur)\
-          + '_' + str(env_seed)
+    # create folder to save data based on parameters
+    save_folder = f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_d{dec_dur}_n{TRAINING_KWARGS['num_periods']}_{env_seed}"
+
 
     # create folder to save data based on env seed
     os.makedirs(save_folder, exist_ok=True)
@@ -651,7 +660,6 @@ if __name__ == '__main__':
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
     # asdasdasd
-    num_periods = 10
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
@@ -667,36 +675,36 @@ if __name__ == '__main__':
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
         
-        d_bh, net = train_network(num_epochs=num_epochs, num_periods=num_periods,
+        data_behav, net = train_network(num_epochs=num_epochs, num_periods=TRAINING_KWARGS['num_periods'],
                                   num_steps_exp=num_steps_exp, criterion=criterion,
                                   env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
                                   debug=debug, seed=seed)
         # save data as npz
         # HINT: use npy?
-        np.savez(save_folder_net + '/data.npz', **d_bh)
+        # np.savez(save_folder_net + '/data.npz', **data_behav)
 
         # save net
         torch.save(net, save_folder_net + '/net.pth')
             
-        # get data from d_bh
-        mean_perf_list = d_bh['mean_perf_list']
-        mean_rew_list = d_bh['mean_rew_list']
-        loss_1st_ep_list = d_bh['loss_1st_ep_list']
-        error_no_action_list = d_bh['error_no_action_list']
-        error_fixation_list = d_bh['error_fixation_list']
-        error_2_list = d_bh['error_2_list']
-        error_3_list = d_bh['error_3_list']
-        plot_perf_rew_loss(num_periods, mean_perf_list, mean_rew_list,
+        # get data from data_behav
+        mean_perf_list = data_behav['mean_perf_list']
+        mean_rew_list = data_behav['mean_rew_list']
+        loss_1st_ep_list = data_behav['loss_1st_ep_list']
+        error_no_action_list = data_behav['error_no_action_list']
+        error_fixation_list = data_behav['error_fixation_list']
+        error_2_list = data_behav['error_2_list']
+        error_3_list = data_behav['error_3_list']
+        plot_perf_rew_loss(TRAINING_KWARGS['num_periods'], mean_perf_list, mean_rew_list,
                         loss_1st_ep_list, save_folder_net)
         
-        plot_error(num_periods, error_no_action_list, error_fixation_list, 
+        plot_error(TRAINING_KWARGS['num_periods'], error_no_action_list, error_fixation_list, 
                 error_2_list, error_3_list, save_folder_net)
         data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                    save_folder=save_folder_net)
-        plot_performace_by_iti(data)
-        # plt.show()
-        # plt.close('all')
+        plot_performace_by_iti(data, save_folder=save_folder_net)
+       # plt.show()
+        plt.close('all')
 
     
     # load configuration file - we might have run the training on the cloud
