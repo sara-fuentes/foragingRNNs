@@ -201,6 +201,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     perf = []
     rew_mat = []
     iti = []
+    prob_r = []
+    prob_l = []
     rew = 0
     action = 0
     ob, _, _, _ = env.step(action)
@@ -230,6 +232,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         if info.get('new_trial', False):
             perf.append(info.get('performance', None))
             iti.append(np.sum(env.gt == 0))
+            prob_r.append(env.trial['probs'][0])
+            prob_l.append(env.trial['probs'][1])
         else:
             perf.append(-1)
             
@@ -243,7 +247,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     data = {'ob': np.array(inputs[:-1]).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
             'rew_mat': rew_mat, 'mean_perf': mean_perf,
-            'mean_rew': mean_rew, 'iti': iti}
+            'mean_rew': mean_rew, 'iti': iti, 'prob_r': prob_r,
+            'prob_l': prob_l}
     return data
 
 
@@ -623,8 +628,8 @@ if __name__ == '__main__':
     main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     w_factor = 0.1
-    mean_ITI = 200
-    max_ITI = 400
+    mean_ITI = 150
+    max_ITI = 200
     fix_dur = 100
     dec_dur = 100
     blk_dur = 50
