@@ -203,7 +203,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     iti = []
     rew = 0
     action = 0
-    ob = env.reset()
+    ob, _, _, _ = env.step(action)
     inputs = [ob]
     if net is not None:
         hidden = torch.zeros(1, 1, net.hidden_size)
@@ -219,8 +219,6 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             action = torch.argmax(action_probs[0, 0]).item()
 
         ob, rew, done, info = env.step(action)
-        if done:
-            ob = env.reset()  # Reset environment if episode is done
 
         inputs.append(ob)
         actions.append(action)
@@ -357,6 +355,11 @@ def train_network(num_epochs, num_periods, num_steps_exp,
         # First, transform variables already existing in data
         # Transform means: change the name, shape, values and type of the variable
         # df = dict2df(data)
+        # print frequency of each action when data['perf'] != -1 using numpy
+        # print('Frequency of each action when perf != -1:')
+        # print(np.unique(np.array(data['actions'])[data['perf'] != -1], return_counts=True))
+        # print('Frequency of each target when perf != -1:')
+        # print(np.unique(np.array(data['gt'])[data['perf'] != -1], return_counts=True))
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
         # end function
@@ -613,7 +616,7 @@ def plot_performace_by_iti(data, save_folder):
 if __name__ == '__main__':
     plt.close('all')
     env_seed = 6
-    num_periods = 20000
+    num_periods = 1000
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
@@ -639,17 +642,19 @@ if __name__ == '__main__':
     env = pass_action.PassAction(env)
     # set seed
     env.seed(env_seed)
-    num_steps = 400
-    data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
-    plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
+    env.reset()
     net_kwargs = {'hidden_size': 128,
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.shape[0]}
-    
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
+    # plot task
+    data = run_agent_in_environment(num_steps_exp=100, env=env)
+    plot_task(env_kwargs=env_kwargs, data=data, num_steps=100)
+    
     # create folder to save data based on parameters
-    save_folder = f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_d{dec_dur}_n{TRAINING_KWARGS['num_periods']}_{env_seed}"
+    save_folder =\
+          f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_d{dec_dur}_n{num_periods}_nb{np.round(blk_dur/1e3, 1)}K_{env_seed}"
 
 
     # create folder to save data based on env seed
