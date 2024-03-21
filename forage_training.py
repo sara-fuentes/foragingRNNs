@@ -39,7 +39,7 @@ TASK = 'ForagingBlocks-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 20,
+                   'n_epochs': 100,
                    'batch_size': 16,
                    'seq_len': 200,
                    'TASK': TASK}
@@ -356,7 +356,7 @@ def train_network(num_epochs, num_periods, num_steps_exp,
         # transform data to a pandas dataframe. 
         # First, transform variables already existing in data
         # Transform means: change the name, shape, values and type of the variable
-        df = dict2df(data)
+        # df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
         # end function
@@ -612,8 +612,8 @@ def plot_performace_by_iti(data, save_folder):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 3
-    num_periods = 100
+    env_seed = 6
+    num_periods = 20000
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
@@ -621,13 +621,15 @@ if __name__ == '__main__':
     # Set up the task
     w_factor = 0.1
     mean_ITI = 200
-    max_ITI = 300
+    max_ITI = 400
     fix_dur = 100
     dec_dur = 100
+    blk_dur = 50
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
-                  'blk_dur': 20, 'timing':
+                  'blk_dur': blk_dur, 'timing':
                       {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
-                       'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
+                       'fixation': fix_dur, 'decision': dec_dur},  # Decision period}
+                       'rewards':{'abort': 0., 'fixation': 0., 'correct': 1.}}  
     TRAINING_KWARGS['classes_weights'] =\
          torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI), w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
     # torch.tensor([1., 1., 1., 1.]) 
@@ -640,7 +642,7 @@ if __name__ == '__main__':
     num_steps = 400
     data = run_agent_in_environment(num_steps_exp=num_steps, env=env)
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps)
-    net_kwargs = {'hidden_size': 64,
+    net_kwargs = {'hidden_size': 128,
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.shape[0]}
     
@@ -665,7 +667,7 @@ if __name__ == '__main__':
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     num_steps_plot = 100
     debug = False
-    num_networks = 1
+    num_networks = 10
     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
     # train several networks with different seeds
     for i_net in range(num_networks):
@@ -681,7 +683,7 @@ if __name__ == '__main__':
                                   debug=debug, seed=seed)
         # save data as npz
         # HINT: use npy?
-        # np.savez(save_folder_net + '/data.npz', **data_behav)
+        np.savez(save_folder_net + '/data.npz', **data_behav)
 
         # save net
         torch.save(net, save_folder_net + '/net.pth')

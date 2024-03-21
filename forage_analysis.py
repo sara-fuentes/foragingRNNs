@@ -61,27 +61,28 @@ class Net(nn.Module):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 1
-    w_factor = 0.01
-    mean_ITI = 200
-    max_ITI = 300
-    fix_dur = 100
-    dec_dur = 100
-
+    env_seed = 4
+    num_periods = 10000
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
-    save_folder = main_folder + 'w_factor_' + str(w_factor) + '_mean_ITI_' + str(mean_ITI)\
-          + '_max_ITI_' + str(max_ITI) + '_fix_dur_' + str(fix_dur) + '_dec_dur_' + str(dec_dur)\
-          + '_' + str(env_seed)
+    # Set up the task
+    w_factor = 0.1
+    mean_ITI = 200
+    max_ITI = 400
+    fix_dur = 100
+    dec_dur = 100
+
+    # create folder to save data based on parameters
+    save_folder = f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_d{dec_dur}_n{num_periods}_{env_seed}"
 
     # get seeds from folders in save_folder
     seeds = [int(f) for f in os.listdir(save_folder) if os.path.isdir(save_folder + '/' + f)]
     # Set up the task
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(200, 100, 300),
-                       'fixation': 100, 'decision': 100}}  # Decision period}
+                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
+                       'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
 
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
@@ -97,8 +98,7 @@ if __name__ == '__main__':
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
        
-    num_steps_exp =\
-        TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
+    num_steps_exp = 10000
     debug = False
     num_networks = len(seeds)
 
@@ -107,10 +107,10 @@ if __name__ == '__main__':
     mean_perf_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
-        
+        print(seed)
         # load data
         save_folder_net = save_folder + '/' + str(seed)
-        data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
+        # data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
         # load net
         net = Net(input_size=net_kwargs['input_size'],
                   hidden_size=net_kwargs['hidden_size'],
@@ -125,17 +125,17 @@ if __name__ == '__main__':
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
         if i_net == 0:
-            ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_exp,
+            ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
                          save_folder=save_folder_net)
         # plot data
         # get mean performance from data
-        mean_performance = data_training['mean_perf_list']
-        ax[0].plot(mean_performance, label='Net ' + str(net))
+        # mean_performance = data_training['mean_perf_list']
+        # ax[0].plot(mean_performance, label='Net ' + str(net))
         # smooth mean performance
-        mean_performance_smooth = np.convolve(mean_performance, np.ones(10)/10, mode='valid')
-        ax[0].plot(mean_performance_smooth, label='Net ' + str(net) + ' smooth')
-        ax[0].set_xlabel('Epochs')
-        ax[0].set_ylabel('Mean performance')
+        # mean_performance_smooth = np.convolve(mean_performance, np.ones(10)/10, mode='valid')
+        # ax[0].plot(mean_performance_smooth, label='Net ' + str(net) + ' smooth')
+        # ax[0].set_xlabel('Epochs')
+        # ax[0].set_ylabel('Mean performance')
     # histogram of mean performance
     ax[1].hist(mean_perf_list, bins=20)
     ax[1].set_xlabel('Mean performance')
