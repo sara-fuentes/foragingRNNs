@@ -14,6 +14,9 @@ import numpy as np
 import os
 import sys
 import forage_training as ft
+import statsmodels.formula.api as smf
+import pandas as pd
+import seaborn as sns
 sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
 sys.path.append('C:/Users/saraf')
 # packages to save data
@@ -58,6 +61,84 @@ class Net(nn.Module):
         x = self.linear(out)
         return x, out
 
+
+def GLM(df):
+    # Prepare df columns
+    # Converting the 'outcome' column to boolean values
+    select_columns = ['reward', 'actions', 'iti']
+    df_glm = df.loc[:, select_columns].copy()
+    # subtract 2 from actions to get 0 for left and 1 for right
+    df_glm['actions'] = df_glm['actions']-2
+
+    # calculate correct_choice regressor L+
+    # define conditions
+    conditions = [
+        (df_glm['reward'] == 0),
+        (df_glm['reward'] == 1) & (df_glm['actions'] == 1),
+        (df_glm['reward'] == 1) & (df_glm['actions'] == 0),
+    ]
+    r_plus = [0, 1, -1]
+    df_glm['r_plus'] = np.select(conditions, r_plus, default='other')
+    df_glm['r_plus'] = pd.to_numeric(df_glm['r_plus'], errors='coerce')
+
+    # same as above but for L-
+    # define conditions
+    conditions = [
+        (df_glm['reward'] == 1),
+        (df_glm['reward'] == 0) & (df_glm['actions'] == 1),
+        (df_glm['reward'] == 0) & (df_glm['actions'] == 0),
+    ]
+    r_minus = [0, 1, -1]
+    df_glm['r_minus'] = np.select(conditions, r_minus, default='other')
+    df_glm['r_minus'] = pd.to_numeric(df_glm['r_minus'], errors='coerce')
+
+    # Creating columns for previous trial results (both dfs)
+    max_shift = 10
+    regr_plus = ''
+    regr_minus = ''
+    for i in range(1, max_shift):
+        df_glm[f'r_plus_{i}'] = df_glm['r_plus'].shift(i)
+        df_glm[f'r_minus_{i}'] = df_glm['r_minus'].shift(i)
+        regr_plus += f'r_plus_{i} + '
+        regr_minus += f'r_minus_{i} + '
+    regr_minus = regr_minus[:-3]
+    # "variable" and "regressors" are columnames of dataframe
+    # Apply glm
+    mM_logit = smf.logit(formula='actions ~ ' + regr_plus + regr_minus, data=df_glm).fit()
+
+    # prints the fitted GLM parameters (coefs), p-values and some other stuff
+    results = mM_logit.summary()
+    print(results)
+    # save param in df
+    m = pd.DataFrame({
+        'coefficient': mM_logit.params,
+        'std_err': mM_logit.bse,
+        'z_value': mM_logit.tvalues,
+        'p_value': mM_logit.pvalues,
+        'conf_Interval_Low': mM_logit.conf_int()[0],
+        'conf_Interval_High': mM_logit.conf_int()[1]
+    })
+
+    orders = np.arange(len(m))
+
+    # filter the DataFrame to separately the coefficients
+    r_plus = m.loc[m.index.str.contains('r_plus'), "coefficient"]
+    r_minus = m.loc[m.index.str.contains('r_minus'), "coefficient"]
+    intercept = m.loc['Intercept', "coefficient"]
+    # TODO: put code to plot in another function
+    plt.figure(figsize=(10, 6))
+
+    plt.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
+    plt.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
+    plt.axhline(y=intercept, label='Intercept', color='black')
+    plt.axhline(y=0, color='gray', linestyle='--')
+
+    plt.ylabel('GLM weight')
+    plt.xlabel('Previous trials')
+    plt.legend()
+    sns.despine()
+    plt.show()
+    # plt.savefig(str(data_folder) + 'ALL_Subject_GLM_Previous_choice.png', transparent=False)
 
 # --- MAIN
 if __name__ == '__main__':
@@ -109,7 +190,7 @@ if __name__ == '__main__':
     num_networks = len(seeds)
 
     # train several networks with different seeds
-    f, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
     mean_perf_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
@@ -144,6 +225,9 @@ if __name__ == '__main__':
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
+        if mean_perf > 0.8:
+            df = ft.dict2df(data)
+            GLM(df)
 
         if i_net == 0:
             ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
