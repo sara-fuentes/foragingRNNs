@@ -17,14 +17,6 @@ import numpy as np
 import os
 import sys
 
-sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
-sys.path.append('C:/Users/saraf')
-# packages to save data
-# packages to handle data
-# packages to visualize data
-# import gym and neurogym to create tasks
-# from neurogym.utils import plotting
-# import torch and neural network modules to build RNNs
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -68,7 +60,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
 
         self.hidden_size = hidden_size
-        # INSTRUCTION 1: build a recurrent neural network with a single
+        # build a recurrent neural network with a single
         # recurrent layer and rectified linear units
         # set seed for weights
         torch.manual_seed(seed)
@@ -80,7 +72,7 @@ class Net(nn.Module):
         if hidden is None:
             hidden = torch.zeros(1, TRAINING_KWARGS['seq_len'],
                                  self.hidden_size)
-        # INSTRUCTION 2: get the output of the network for a given input
+        # get the output of the network for a given input
         out, _ = self.vanilla(x, hidden)
         x = self.linear(out)
         return x, out
@@ -97,7 +89,7 @@ def analysis_activity_by_condition(activity, info, config,
             values), sharex=True, dpi=150)
         t_plot = np.arange(activity.shape[1]) * config['dt']
         for i_v, value in enumerate(values):
-            # INSTRUCTION 13: plot the average activity across neurons and
+            # plot the average activity across neurons and
             # trials for each condition
             a = activity[info[condition] == value]
             ax[i_v].imshow(a.mean(axis=0).T, aspect='auto', cmap='viridis')
@@ -107,10 +99,7 @@ def analysis_activity_by_condition(activity, info, config,
             # change the xticks to show time in ms
             ax[1].set_xticks(np.arange(0, activity.shape[1], 10))
             ax[1].set_xticklabels(t_plot[::10])
-
-        # plt.legend(title=condition, loc='center left',
-        # bbox_to_anchor=(1.0, 0.5))
-
+        plt.tight_layout()
 
 def probit(x, beta, alpha):
     """
@@ -334,13 +323,12 @@ def dict2df(data):
 
     """
     # transform data to a pandas dataframe. 
-    # First, transform variables already existing in data
-    gt = np.array(data['gt'])
-    indx = (gt != 0) & (gt != 1)
-    # keep only gt corresponding to choice
     actions = np.array(data['actions'])
-    actions = actions[indx]
     reward = np.array(data['rew_mat'])
+    gt = np.array(data['gt'])
+    # keep only gt corresponding to choice
+    indx = (gt != 0) & (gt != 1)
+    actions = actions[indx]
     reward = reward[indx]
     gt = gt[indx]
     df = pd.DataFrame({'actions': actions, 'gt': gt, 'iti': data['iti'],
@@ -367,12 +355,10 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
     error_2_list = []
     error_3_list = []
     train_1 = False
+    log_per = 200
     if not train_1:
         num_steps_exp = TRAINING_KWARGS['seq_len']
     for i_per in range(num_periods):
-        # dataset = {'inputs':seq_len x batch_size x num_inputs,
-        #            'labels': seq_len x batch_size}
-
         data = run_agent_in_environment(env=env, net=net,
                                         num_steps_exp=num_steps_exp)
         # transform list of torch to torch tensor
@@ -387,40 +373,28 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
             plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
         # transform data to a pandas dataframe. 
-        # First, transform variables already existing in data
-        # Transform means: change the name, shape, values and type of the variable
         df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
-        # end function
-
-        # if debug:
-        #     plot_dataset(dataset)
-        # # Train model with RL data
-        
         if train_1:
             dataset = build_dataset(data)
             loss_1st_ep = train(num_epochs=num_epochs, dataset=dataset,
                                 net=net, optimizer=optimizer,
                                 criterion=criterion, env=env)
         else:
-            # we need zero the parameter gradients to re-initialize and avoid they
+            # we need to zero the parameter gradients to re-initialize and avoid they
             # accumulate across epochs
             optimizer.zero_grad()
-
             # compute loss with respect to the labels
             loss = criterion(outputs, labels)
-
             # compute gradients
             loss.backward()
-
             # update weights
             optimizer.step()
             loss_1st_ep = loss.item()
-
         loss_1st_ep_list.append(loss_1st_ep)
         # print loss
-        if i_per % 200 == 0:
+        if i_per % log_per == 0:
             print('------------') 
             print('Period: ', i_per, 'of', num_periods)
             print('mean performance: ', data['mean_perf'])
@@ -463,11 +437,9 @@ def train(num_epochs, net, optimizer, criterion, env, dataset):
     None.
 
     """
-    # print('Training task ', TASK)
     running_loss = 0.0
     for ep in range(num_epochs):
         # get inputs and labels and pass them to the GPU
-        # TODO: HERE
         inputs = dataset['inputs']
         labels = dataset['labels']
         # inputs = np.expand_dims(inputs, axis=2)
@@ -482,20 +454,20 @@ def train(num_epochs, net, optimizer, criterion, env, dataset):
         # accumulate across epochs
         optimizer.zero_grad()
 
-        # INSTRUCTION 3: FORWARD PASS: get the output of the network for a
+        # forward pass: get the output of the network for a
         # given input
         outputs, _ = net(inputs)
 
         # reshape outputs so they have the same shape as labels
         outputs = outputs.view(-1, env.action_space.n)
 
-        #  INSTRUCTION 4: compute loss with respect to the labels
+        # compute loss with respect to the labels
         loss = criterion(outputs, labels)
 
-        # INSTRUCTION 5: compute gradients
+        # compute gradients
         loss.backward()
 
-        # INSTRUCTION 6: update weights
+        # update weights
         optimizer.step()
 
         # print average loss over last 200 training iterations and save the
@@ -545,7 +517,7 @@ def plot_activity(activity, obs, actions, gt, config, trial):
     ax[0].set_title('Observations')
     ax[0].set_ylabel('Stimuli')
     # change the xticks to show time in ms
-    # INSTRUCTION 11: plot the activity for one trial
+    # plot the activity for one trial
     ax[1].imshow(activity[trial].T, aspect='auto', cmap='viridis')
     ax[1].set_title('Activity')
     ax[1].set_ylabel('Neurons')
@@ -672,7 +644,7 @@ def plot_performace_by_iti(data, save_folder):
 if __name__ == '__main__':
     plt.close('all')
     env_seed = 8
-    num_periods = 2000
+    num_periods = 4000
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
@@ -692,7 +664,6 @@ if __name__ == '__main__':
                        'rewards':{'abort': 0., 'fixation': 0., 'correct': 1.}}  
     TRAINING_KWARGS['classes_weights'] =\
          torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI), w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
-    # torch.tensor([1., 1., 1., 1.]) 
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
     env = pass_reward.PassReward(env)
@@ -724,7 +695,6 @@ if __name__ == '__main__':
     # Save config
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
-    # asdasdasd
     num_epochs = TRAINING_KWARGS['n_epochs']
     num_steps_exp =\
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
@@ -765,7 +735,6 @@ if __name__ == '__main__':
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                    save_folder=save_folder_net)
         plot_performace_by_iti(data, save_folder=save_folder_net)
-       # plt.show()
         plt.close('all')
 
     
