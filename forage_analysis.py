@@ -61,20 +61,24 @@ class Net(nn.Module):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 4
-    num_periods = 10000
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-    w_factor = 0.1
+    env_seed = 7
+    num_periods = 2000
+    w_factor = 0.00001
     mean_ITI = 200
     max_ITI = 400
     fix_dur = 100
     dec_dur = 100
-
+    blk_dur = 50
+    probs = np.array([0.1, 0.9])
     # create folder to save data based on parameters
-    save_folder = f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_d{dec_dur}_n{num_periods}_{env_seed}"
+    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                   f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
+                   f"prb{probs[0]}_seed{env_seed}")
+
 
     # get seeds from folders in save_folder
     seeds = [int(f) for f in os.listdir(save_folder) if os.path.isdir(save_folder + '/' + f)]
@@ -90,6 +94,7 @@ if __name__ == '__main__':
     env = pass_action.PassAction(env)
     # set seed
     env.seed(env_seed)
+    env.reset()
 
     net_kwargs = {'hidden_size': 64,
                   'action_size': env.action_space.n,
@@ -107,10 +112,12 @@ if __name__ == '__main__':
     mean_perf_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
-        print(seed)
+        print('Seed: ', seed)
+        # print net number and total number of nets
+        print(f'Net {i_net+1}/{num_networks}')
         # load data
         save_folder_net = save_folder + '/' + str(seed)
-        # data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
+        data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
         # load net
         net = Net(input_size=net_kwargs['input_size'],
                   hidden_size=net_kwargs['hidden_size'],
@@ -129,13 +136,14 @@ if __name__ == '__main__':
                          save_folder=save_folder_net)
         # plot data
         # get mean performance from data
-        # mean_performance = data_training['mean_perf_list']
+        mean_performance = data_training['mean_perf_list']
         # ax[0].plot(mean_performance, label='Net ' + str(net))
         # smooth mean performance
-        # mean_performance_smooth = np.convolve(mean_performance, np.ones(10)/10, mode='valid')
-        # ax[0].plot(mean_performance_smooth, label='Net ' + str(net) + ' smooth')
-        # ax[0].set_xlabel('Epochs')
-        # ax[0].set_ylabel('Mean performance')
+        roll = 20
+        mean_performance_smooth = np.convolve(mean_performance, np.ones(roll)/roll, mode='valid')
+        ax[0].plot(mean_performance_smooth, label='Net ' + str(net) + ' smooth')
+        ax[0].set_xlabel('Epochs')
+        ax[0].set_ylabel('Mean performance')
     # histogram of mean performance
     ax[1].hist(mean_perf_list, bins=20)
     ax[1].set_xlabel('Mean performance')
@@ -143,10 +151,4 @@ if __name__ == '__main__':
     # save figure
     f.savefig(save_folder + '/performance.png')
     plt.show()
-        # get data from d_bh
 
-    
-    # load configuration file - we might have run the training on the cloud
-    # and might now open the results locally
-    # with open(get_modelpath(TASK) / 'config.json') as f:
-    #     config = json.load(f)
