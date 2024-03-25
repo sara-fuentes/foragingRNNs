@@ -343,9 +343,9 @@ def dict2df(data):
     # First, transform variables already existing in data
     gt = np.array(data['gt'])
     # keep only gt corresponding to choice
-    gt = gt[(gt != 0) & (gt != 1)]
     actions = np.array(data['actions'])
     actions = actions[(gt != 0) & (gt != 1)]
+    gt = gt[(gt != 0) & (gt != 1)]
     df = pd.DataFrame({'actions': actions, 'gt': gt, 'iti': data['iti'],
                        'prob_r': data['prob_r']})
     return df
