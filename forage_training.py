@@ -41,7 +41,7 @@ TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
                    'n_epochs': 100,
                    'batch_size': 16,
-                   'seq_len': 200,
+                   'seq_len': 300,
                    'TASK': TASK}
 
 
@@ -197,6 +197,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             - 'rew_mat': Reward matrix.
     """
     actions = []
+    act_pr_mat = []
     gt = []
     perf = []
     rew_mat = []
@@ -216,6 +217,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             ob_tensor = torch.tensor([ob], dtype=torch.float32)
             ob_tensor = ob_tensor.unsqueeze(0)
             action_probs, hidden = net(x=ob_tensor, hidden=hidden)
+            act_pr_mat.append(action_probs)
             # Assuming `net` returns action probabilities
             action_probs = torch.nn.functional.softmax(action_probs, dim=2)
             action = torch.argmax(action_probs[0, 0]).item()
@@ -237,18 +239,15 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
         else:
             perf.append(-1)
             
-    print('------------') 
     perf = np.array(perf)           
     mean_perf = np.mean(perf[perf != -1])
-    print('mean performance: ', mean_perf)
     mean_rew = np.mean(rew_mat)
-    print('mean reward: ', mean_rew)
-    print('------------')
+
     data = {'ob': np.array(inputs[:-1]).astype(float),
             'actions': actions, 'gt': gt, 'perf': perf,
             'rew_mat': rew_mat, 'mean_perf': mean_perf,
             'mean_rew': mean_rew, 'iti': iti, 'prob_r': prob_r,
-            'prob_l': prob_l}
+            'prob_l': prob_l, 'act_pr_mat': act_pr_mat}
     return data
 
 
@@ -326,8 +325,8 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
         plt.savefig(save_folder + '/task.png')
 
 
-def train_network(num_epochs, num_periods, num_steps_exp,
-                   criterion, env, net_kwargs, env_kwargs, debug=False, seed=0):
+def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
+                  net_kwargs, env_kwargs, debug=False, seed=0, save_folder=None):
     """
     """
     net = Net(input_size=net_kwargs['input_size'],
@@ -345,14 +344,23 @@ def train_network(num_epochs, num_periods, num_steps_exp,
     error_fixation_list = []
     error_2_list = []
     error_3_list = []
-    
+    train_1 = False
+    if not train_1:
+        num_steps_exp = TRAINING_KWARGS['seq_len']
     for i_per in range(num_periods):
         # dataset = {'inputs':seq_len x batch_size x num_inputs,
         #            'labels': seq_len x batch_size}
-        print('Period: ', i_per, 'of', num_periods)
-        with torch.no_grad():
-            data = run_agent_in_environment(env=env, net=net,
-                                            num_steps_exp=num_steps_exp)
+
+        data = run_agent_in_environment(env=env, net=net,
+                                        num_steps_exp=num_steps_exp)
+        # transform list of torch to torch tensor
+        outputs = torch.stack(data['act_pr_mat'], dim=1)
+        # squeeze the outputs tensor to remove the dimension of size 1
+        outputs = outputs.squeeze()
+        labels = np.array(data['gt'])
+        outputs = outputs.type(torch.float).to(DEVICE)
+        labels = torch.from_numpy(labels).type(torch.long).to(DEVICE)
+
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=num_steps_exp)
@@ -360,24 +368,45 @@ def train_network(num_epochs, num_periods, num_steps_exp,
         # First, transform variables already existing in data
         # Transform means: change the name, shape, values and type of the variable
         # df = dict2df(data)
-        # print frequency of each action when data['perf'] != -1 using numpy
-        # print('Frequency of each action when perf != -1:')
-        # print(np.unique(np.array(data['actions'])[data['perf'] != -1], return_counts=True))
-        # print('Frequency of each target when perf != -1:')
-        # print(np.unique(np.array(data['gt'])[data['perf'] != -1], return_counts=True))
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
         # end function
 
-        dataset = build_dataset(data)
-        if debug:
-            plot_dataset(dataset)
-        # Train model with RL data
-        loss_1st_ep = train(num_epochs=num_epochs, dataset=dataset,
-                            net=net, optimizer=optimizer,
-                            criterion=criterion, env=env)
-        loss_1st_ep_list.append(loss_1st_ep)
+        # if debug:
+        #     plot_dataset(dataset)
+        # # Train model with RL data
         
+        if train_1:
+            dataset = build_dataset(data)
+            loss_1st_ep = train(num_epochs=num_epochs, dataset=dataset,
+                                net=net, optimizer=optimizer,
+                                criterion=criterion, env=env)
+        else:
+            # we need zero the parameter gradients to re-initialize and avoid they
+            # accumulate across epochs
+            optimizer.zero_grad()
+
+            # compute loss with respect to the labels
+            loss = criterion(outputs, labels)
+
+            # compute gradients
+            loss.backward()
+
+            # update weights
+            optimizer.step()
+            loss_1st_ep = loss.item()
+
+        loss_1st_ep_list.append(loss_1st_ep)
+        # print loss
+        if i_per % 200 == 0:
+            print('------------') 
+            print('Period: ', i_per, 'of', num_periods)
+            print('mean performance: ', data['mean_perf'])
+            print('mean reward: ', data['mean_rew'])
+            print('Loss: ', loss_1st_ep)
+            # save net
+            torch.save(net, save_folder + '/net' + str(i_per) + '.pth')
+
         error_dict = compute_error(data)
         error_no_action_list.append(error_dict['error_no_action'])
         error_fixation_list.append(error_dict['error_fixation'])
@@ -620,20 +649,21 @@ def plot_performace_by_iti(data, save_folder):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 6
-    num_periods = 1000
+    env_seed = 7
+    num_periods = 2000
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-    w_factor = 0.1
-    mean_ITI = 150
-    max_ITI = 200
+    w_factor = 0.00001
+    mean_ITI = 200
+    max_ITI = 400
     fix_dur = 100
     dec_dur = 100
     blk_dur = 50
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
+    probs = np.array([0.1, 0.9])
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
                   'blk_dur': blk_dur, 'timing':
                       {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
                        'fixation': fix_dur, 'decision': dec_dur},  # Decision period}
@@ -658,8 +688,9 @@ if __name__ == '__main__':
     plot_task(env_kwargs=env_kwargs, data=data, num_steps=100)
     
     # create folder to save data based on parameters
-    save_folder =\
-          f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_d{dec_dur}_n{num_periods}_nb{np.round(blk_dur/1e3, 1)}K_{env_seed}"
+    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                   f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
+                   f"prb{probs[0]}_seed{env_seed}")
 
 
     # create folder to save data based on env seed
@@ -688,15 +719,12 @@ if __name__ == '__main__':
         os.makedirs(save_folder_net, exist_ok=True)
         
         data_behav, net = train_network(num_epochs=num_epochs, num_periods=TRAINING_KWARGS['num_periods'],
-                                  num_steps_exp=num_steps_exp, criterion=criterion,
-                                  env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
-                                  debug=debug, seed=seed)
+                                        num_steps_exp=num_steps_exp, criterion=criterion,
+                                        env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
+                                        debug=debug, seed=seed, save_folder=save_folder_net)
         # save data as npz
-        # HINT: use npy?
+        # TODO: use npy?
         np.savez(save_folder_net + '/data.npz', **data_behav)
-
-        # save net
-        torch.save(net, save_folder_net + '/net.pth')
             
         # get data from data_behav
         mean_perf_list = data_behav['mean_perf_list']
