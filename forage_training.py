@@ -10,19 +10,13 @@ import torch
 import ngym_foraging as ngym_f
 from ngym_foraging.wrappers import pass_reward, pass_action
 import gym
-import sklearn.discriminant_analysis as sklda
-import sklearn.model_selection as sklms
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from scipy.special import erf
-from scipy.optimize import curve_fit
 import pandas as pd
 import numpy as np
-import json
-from pathlib import Path
 import os
 import sys
-import time
+
 sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
 sys.path.append('C:/Users/saraf')
 # packages to save data
@@ -269,7 +263,7 @@ def build_dataset(data):
     return dataset
 
 
-def plot_dataset(dataset, batch=0):
+def plot_dataset(dataset):
     f, ax = plt.subplots(nrows=4, sharex=True)
     for i in range(2):
         inputs = dataset['inputs'][i,:,:]
@@ -342,12 +336,15 @@ def dict2df(data):
     # transform data to a pandas dataframe. 
     # First, transform variables already existing in data
     gt = np.array(data['gt'])
+    indx = (gt != 0) & (gt != 1)
     # keep only gt corresponding to choice
     actions = np.array(data['actions'])
-    actions = actions[(gt != 0) & (gt != 1)]
-    gt = gt[(gt != 0) & (gt != 1)]
+    actions = actions[indx]
+    reward = np.array(data['rew_mat'])
+    reward = reward[indx]
+    gt = gt[indx]
     df = pd.DataFrame({'actions': actions, 'gt': gt, 'iti': data['iti'],
-                       'prob_r': data['prob_r']})
+                       'prob_r': data['prob_r'], 'reward': reward})
     return df
 
 def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
