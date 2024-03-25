@@ -41,7 +41,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
 
         self.hidden_size = hidden_size
-        # INSTRUCTION 1: build a recurrent neural network with a single
+        # build a recurrent neural network with a single
         # recurrent layer and rectified linear units
         # set seed for weights
         torch.manual_seed(seed)
@@ -53,10 +53,11 @@ class Net(nn.Module):
         if hidden is None:
             hidden = torch.zeros(1, TRAINING_KWARGS['seq_len'],
                                  self.hidden_size)
-        # INSTRUCTION 2: get the output of the network for a given input
+        # get the output of the network for a given input
         out, _ = self.vanilla(x, hidden)
         x = self.linear(out)
         return x, out
+
 
 # --- MAIN
 if __name__ == '__main__':
@@ -118,22 +119,6 @@ if __name__ == '__main__':
         # load data
         save_folder_net = save_folder + '/' + str(seed)
         data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
-        # load net
-        net = Net(input_size=net_kwargs['input_size'],
-                  hidden_size=net_kwargs['hidden_size'],
-                  output_size=env.action_space.n)
-        net = net.to(DEVICE)
-        net = torch.load(save_folder_net + '/net.pth')
-
-        # test net
-        data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
-        perf = np.array(data['perf'])
-        perf = perf[perf != -1]
-        mean_perf = np.mean(perf)
-        mean_perf_list.append(mean_perf)
-        if i_net == 0:
-            ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
-                         save_folder=save_folder_net)
         # plot data
         # get mean performance from data
         mean_performance = data_training['mean_perf_list']
@@ -141,9 +126,29 @@ if __name__ == '__main__':
         # smooth mean performance
         roll = 20
         mean_performance_smooth = np.convolve(mean_performance, np.ones(roll)/roll, mode='valid')
-        ax[0].plot(mean_performance_smooth, label='Net ' + str(net) + ' smooth')
-        ax[0].set_xlabel('Epochs')
-        ax[0].set_ylabel('Mean performance')
+        # check if mean performance is over a threshold at some point during training
+        if np.max(mean_performance_smooth) > 0.7:
+            ax[0].plot(mean_performance_smooth, label='Net ' + str(i_net) + ' smooth')
+            ax[0].set_xlabel('Epochs')
+            ax[0].set_ylabel('Mean performance')
+
+        # load net
+        net = Net(input_size=net_kwargs['input_size'],
+                  hidden_size=net_kwargs['hidden_size'],
+                  output_size=env.action_space.n)
+        net = net.to(DEVICE)
+        net = torch.load(save_folder_net + '/net.pth')
+        # test net
+        data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
+        perf = np.array(data['perf'])
+        perf = perf[perf != -1]
+        mean_perf = np.mean(perf)
+        mean_perf_list.append(mean_perf)
+
+        if i_net == 0:
+            ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
+                         save_folder=save_folder_net)
+
     # histogram of mean performance
     ax[1].hist(mean_perf_list, bins=20)
     ax[1].set_xlabel('Mean performance')

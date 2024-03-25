@@ -649,7 +649,7 @@ def plot_performace_by_iti(data, save_folder):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 7
+    env_seed = 8
     num_periods = 2000
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
