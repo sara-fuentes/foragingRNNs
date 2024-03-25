@@ -324,6 +324,31 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     if save_folder is not None:
         plt.savefig(save_folder + '/task.png')
 
+def dict2df(data):
+    """
+    Transform data dictionary to pandas dataframe.
+
+    Parameters
+    ----------
+    data : dict
+        DESCRIPTION.
+
+    Returns
+    -------
+    df : TYPE
+        DESCRIPTION.
+
+    """
+    # transform data to a pandas dataframe. 
+    # First, transform variables already existing in data
+    gt = np.array(data['gt'])
+    # keep only gt corresponding to choice
+    actions = np.array(data['actions'])
+    actions = actions[(gt != 0) & (gt != 1)]
+    gt = gt[(gt != 0) & (gt != 1)]
+    df = pd.DataFrame({'actions': actions, 'gt': gt, 'iti': data['iti'],
+                       'prob_r': data['prob_r']})
+    return df
 
 def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
                   net_kwargs, env_kwargs, debug=False, seed=0, save_folder=None):
@@ -367,7 +392,7 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
         # transform data to a pandas dataframe. 
         # First, transform variables already existing in data
         # Transform means: change the name, shape, values and type of the variable
-        # df = dict2df(data)
+        df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
         # end function
@@ -416,7 +441,7 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
             'loss_1st_ep_list': loss_1st_ep_list, 'error_no_action_list': error_no_action_list,
             'error_fixation_list': error_fixation_list, 'error_2_list': error_2_list,
             'error_3_list': error_3_list}
-    return dict, net
+    return dict, net, df
 
 
 def train(num_epochs, net, optimizer, criterion, env, dataset):
@@ -718,7 +743,7 @@ if __name__ == '__main__':
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
         
-        data_behav, net = train_network(num_epochs=num_epochs, num_periods=TRAINING_KWARGS['num_periods'],
+        data_behav, net, df = train_network(num_epochs=num_epochs, num_periods=TRAINING_KWARGS['num_periods'],
                                         num_steps_exp=num_steps_exp, criterion=criterion,
                                         env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
                                         debug=debug, seed=seed, save_folder=save_folder_net)
