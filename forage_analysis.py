@@ -144,11 +144,11 @@ def GLM(df):
 if __name__ == '__main__':
     plt.close('all')
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     env_seed = 7
-    num_periods = 2000
+    num_periods = 1000
     w_factor = 0.00001
     mean_ITI = 200
     max_ITI = 400
@@ -161,14 +161,15 @@ if __name__ == '__main__':
                    f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
                    f"prb{probs[0]}_seed{env_seed}")
 
-
     # get seeds from folders in save_folder
-    seeds = [int(f) for f in os.listdir(save_folder) if os.path.isdir(save_folder + '/' + f)]
+    seeds = [int(f) for f in os.listdir(save_folder) if
+             os.path.isdir(save_folder + '/' + f)]
     # Set up the task
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI), # mean, min, max
-                       'fixation': fix_dur, 'decision': dec_dur}}  # Decision period}
+                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+                       # mean, min, max
+                       'fixation': fix_dur, 'decision': dec_dur}} # Decision period}
 
     # call function to sample
     env = gym.make(TASK, **env_kwargs)
@@ -181,10 +182,10 @@ if __name__ == '__main__':
     net_kwargs = {'hidden_size': 64,
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.shape[0]}
-    
+
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
-       
+
     num_steps_exp = 10000
     debug = False
     num_networks = len(seeds)
@@ -199,17 +200,21 @@ if __name__ == '__main__':
         print(f'Net {i_net+1}/{num_networks}')
         # load data
         save_folder_net = save_folder + '/' + str(seed)
-        data_training = np.load(save_folder_net + '/data.npz', allow_pickle=True)
+        data_training = np.load(save_folder_net + '/data.npz',
+                                allow_pickle=True)
         # plot data
         # get mean performance from data
         mean_performance = data_training['mean_perf_list']
         # ax[0].plot(mean_performance, label='Net ' + str(net))
         # smooth mean performance
         roll = 20
-        mean_performance_smooth = np.convolve(mean_performance, np.ones(roll)/roll, mode='valid')
-        # check if mean performance is over a threshold at some point during training
+        mean_performance_smooth = np.convolve(mean_performance,
+                                              np.ones(roll)/roll, mode='valid')
+        # check if mean performance is over a threshold at some point during
+        # training
         if np.max(mean_performance_smooth) > 0.7:
-            ax[0].plot(mean_performance_smooth, label='Net ' + str(i_net) + ' smooth')
+            ax[0].plot(mean_performance_smooth, label='Net ' + str(i_net) +
+                       ' smooth')
             ax[0].set_xlabel('Epochs')
             ax[0].set_ylabel('Mean performance')
 
@@ -218,9 +223,11 @@ if __name__ == '__main__':
                   hidden_size=net_kwargs['hidden_size'],
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
-        net = torch.load(save_folder_net + '/net.pth')
+        # TODO: check!!
+        net = torch.load(save_folder_net + '/net800.pth')
         # test net
-        data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp, env=env, net=net)
+        data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
+                                           env=env, net=net)
         perf = np.array(data['perf'])
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
