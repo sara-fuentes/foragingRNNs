@@ -399,7 +399,7 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
             loss_1st_ep = loss.item()
         loss_1st_ep_list.append(loss_1st_ep)
         # print loss
-        if i_per % log_per == 0:
+        if i_per % log_per == log_per-1:
             print('------------')
             print('Period: ', i_per, 'of', num_periods)
             print('mean performance: ', data['mean_perf'])

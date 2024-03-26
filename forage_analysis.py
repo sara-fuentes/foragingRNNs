@@ -147,8 +147,13 @@ if __name__ == '__main__':
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
+<<<<<<< HEAD
     env_seed = 7
     num_periods = 1000
+=======
+    env_seed = 8
+    num_periods = 4000
+>>>>>>> 64907f8508f03fe5200cf28a7a26a08ec075bc93
     w_factor = 0.00001
     mean_ITI = 200
     max_ITI = 400
@@ -192,6 +197,7 @@ if __name__ == '__main__':
 
     # train several networks with different seeds
     f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+    ax = ax.flatten()
     mean_perf_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
@@ -223,8 +229,18 @@ if __name__ == '__main__':
                   hidden_size=net_kwargs['hidden_size'],
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
+<<<<<<< HEAD
         # TODO: check!!
         net = torch.load(save_folder_net + '/net800.pth')
+=======
+        # find the newest net, which is the file with the highest number
+        net_files = [f for f in os.listdir(save_folder_net) if 'net' in f]
+        # find the number of the newest net file, being the file names net0, net1, net2, etc.
+        net_files = [int(f.split('net')[1].split('.pth')[0]) for f in net_files]
+        net_files.sort()
+        net_file = 'net'+str(net_files[-1])+'.pth'
+        net = torch.load(save_folder_net + '/'+net_file)
+>>>>>>> 64907f8508f03fe5200cf28a7a26a08ec075bc93
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
