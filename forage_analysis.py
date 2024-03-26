@@ -162,57 +162,24 @@ def load_net(save_folder, performance, take_best=True):
         net = torch.load(net_path)
     return net
 
-    
 
-# --- MAIN
-if __name__ == '__main__':
-    plt.close('all')
-    take_best = True
-    perf_threshold = 0.8
-    # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
-    # Set up the task
-    env_seed = 8 # 7
-    num_periods = 4000 # 2000
-    w_factor = 0.00001
-    mean_ITI = 200
-    max_ITI = 400
-    fix_dur = 100
-    dec_dur = 100
-    blk_dur = 50
-    probs = np.array([0.1, 0.9])
-    # create folder to save data based on parameters
-    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                   f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
-                   f"prb{probs[0]}_seed{env_seed}")
+def plot_mean_perf(ax, mean_performance_smooth):
+    ax.plot(mean_performance_smooth)
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel('Mean performance')
 
-    # Set up the task
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
-                  'blk_dur': 20, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
-                       # mean, min, max
-                       'fixation': fix_dur, 'decision': dec_dur}} # Decision period}
 
-    # call function to sample
-    env = gym.make(TASK, **env_kwargs)
-    env = pass_reward.PassReward(env)
-    env = pass_action.PassAction(env)
-    # set seed
-    env.seed(env_seed)
-    env.reset()
+def plot_hist_mean_perf(ax, mean_perf_list):
+    ax.hist(mean_perf_list, bins=20)
+    ax.set_xlabel('Mean performance')
+    ax.set_ylabel('Frequency')
 
-    net_kwargs = {'hidden_size': 64,
-                  'action_size': env.action_space.n,
-                  'input_size': env.observation_space.shape[0]}
 
-    TRAINING_KWARGS['env_kwargs'] = env_kwargs
-    TRAINING_KWARGS['net_kwargs'] = net_kwargs
+def general_analysis(save_folder, perf_threshold, net_kwargs,
+                     env, env_kwargs, take_best, num_steps_exp=10000,
+                     debug=False):
 
-    # TODO: create general analysis function from here
-    num_steps_exp = 10000 # parameter with default value
-    debug = False # parameter with default value
-     # get seeds from folders in save_folder
+    # get seeds from folders in save_folder
     seeds = [int(f) for f in os.listdir(save_folder) if
              os.path.isdir(save_folder + '/' + f)]
 
@@ -240,10 +207,8 @@ if __name__ == '__main__':
         # check if mean performance is over a threshold at some point during
         # training
         if np.max(mean_performance_smooth) > perf_threshold:
-            ax[0].plot(mean_performance_smooth, label='Net ' + str(i_net) +
-                       ' smooth')
-            ax[0].set_xlabel('Epochs')
-            ax[0].set_ylabel('Mean performance')
+            plot_mean_perf(ax=ax[0],
+                           mean_performance_smooth=mean_performance_smooth)
 
         # load net
         net = Net(input_size=net_kwargs['input_size'],
@@ -251,7 +216,9 @@ if __name__ == '__main__':
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
         # load network
-        net = load_net(save_folder=save_folder_net, performance=mean_performance_smooth, take_best=take_best)
+        net = load_net(save_folder=save_folder_net,
+                       performance=mean_performance_smooth,
+                       take_best=take_best)
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
@@ -269,10 +236,59 @@ if __name__ == '__main__':
                          save_folder=save_folder_net)
 
     # histogram of mean performance
-    ax[1].hist(mean_perf_list, bins=20)
-    ax[1].set_xlabel('Mean performance')
-    ax[1].set_ylabel('Frequency')
+    plot_hist_mean_perf(ax=ax[1], mean_perf_list=mean_perf_list)
     # save figure
     f.savefig(save_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
 
+
+# --- MAIN
+if __name__ == '__main__':
+    plt.close('all')
+    take_best = True
+    perf_threshold = 0.8
+    # create folder to save data based on env seed
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    # Set up the task
+    env_seed = 8  # 7
+    num_periods = 4000  # 2000
+    w_factor = 0.00001
+    mean_ITI = 200
+    max_ITI = 400
+    fix_dur = 100
+    dec_dur = 100
+    blk_dur = 50
+    probs = np.array([0.1, 0.9])
+    # create folder to save data based on parameters
+    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                    f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
+                    f"prb{probs[0]}_seed{env_seed}")
+
+    # Set up the task
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
+                  'blk_dur': 20, 'timing':
+                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+                        # mean, min, max
+                        'fixation': fix_dur, 'decision': dec_dur}} # Decision period
+
+    # call function to sample
+    env = gym.make(TASK, **env_kwargs)
+    env = pass_reward.PassReward(env)
+    env = pass_action.PassAction(env)
+    # set seed
+    env.seed(env_seed)
+    env.reset()
+
+    net_kwargs = {'hidden_size': 64,
+                  'action_size': env.action_space.n,
+                  'input_size': env.observation_space.shape[0]}
+
+    TRAINING_KWARGS['env_kwargs'] = env_kwargs
+    TRAINING_KWARGS['net_kwargs'] = net_kwargs
+
+    general_analysis(save_folder=save_folder, perf_threshold=perf_threshold,
+                     net_kwargs=net_kwargs, env=env, env_kwargs=env_kwargs,
+                     take_best=take_best)
+                     
+                
