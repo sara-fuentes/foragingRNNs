@@ -110,7 +110,7 @@ def GLM(df):
     results = mM_logit.summary()
     print(results)
     # save param in df
-    m = pd.DataFrame({
+    GLM_df = pd.DataFrame({
         'coefficient': mM_logit.params,
         'std_err': mM_logit.bse,
         'z_value': mM_logit.tvalues,
@@ -119,26 +119,51 @@ def GLM(df):
         'conf_Interval_High': mM_logit.conf_int()[1]
     })
 
-    orders = np.arange(len(m))
+    return GLM_df
+
+def plot_GLM(ax, GLM_df):
+    orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separately the coefficients
-    r_plus = m.loc[m.index.str.contains('r_plus'), "coefficient"]
-    r_minus = m.loc[m.index.str.contains('r_minus'), "coefficient"]
-    intercept = m.loc['Intercept', "coefficient"]
+    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
+    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+    intercept = GLM_df.loc['Intercept', "coefficient"]
     # TODO: put code to plot in another function
     plt.figure(figsize=(10, 6))
 
-    plt.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
-    plt.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
-    plt.axhline(y=intercept, label='Intercept', color='black')
-    plt.axhline(y=0, color='gray', linestyle='--')
+    ax[3].plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
+    ax[3].plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
+    ax[3].axhline(y=intercept, label='Intercept', color='black')
+    ax[3].axhline(y=0, color='gray', linestyle='--')
 
-    plt.ylabel('GLM weight')
-    plt.xlabel('Previous trials')
-    plt.legend()
-    sns.despine()
-    plt.show()
-    # plt.savefig(str(data_folder) + 'ALL_Subject_GLM_Previous_choice.png', transparent=False)
+    ax[3].ylabel('GLM weight')
+    ax[3].xlabel('Previous trials')
+    ax[3].legend()
+    # sns.despine()
+    # plt.show()
+    # plt.savefig(str(data_folder) + 'ALL_Subject_GLM_Previous_choice.png',
+    # transparent=False)
+
+
+def load_net(save_folder_net):
+    # check if net.pth exists in the folder (for nets that have not been saved
+    # several times during training)
+    net_pth_path = os.path.join(save_folder_net, 'net.pth')
+    if os.path.exists(net_pth_path):
+        # If net.pth exists, load it directly
+        net = torch.load(net_pth_path)
+    else:
+        # If net.pth doesn't exist, find the newest net,
+        # which is the file with the highest number
+        net_files = [f for f in os.listdir(save_folder_net) if 'net' in f]
+        # find the number of the newest net file, being the file names net0, net1, net2, etc.
+        net_files = [int(f.split('net')[1].split('.pth')[0]) for f in net_files]
+        net_files.sort()
+        net_file = 'net'+str(net_files[-1])+'.pth'
+        net_path = os.path.join(save_folder_net, net_file)
+        net = torch.load(net_path)
+
+    
 
 # --- MAIN
 if __name__ == '__main__':
@@ -147,13 +172,8 @@ if __name__ == '__main__':
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-<<<<<<< HEAD
     env_seed = 7
-    num_periods = 1000
-=======
-    env_seed = 8
-    num_periods = 4000
->>>>>>> 64907f8508f03fe5200cf28a7a26a08ec075bc93
+    num_periods = 2000
     w_factor = 0.00001
     mean_ITI = 200
     max_ITI = 400
@@ -229,18 +249,8 @@ if __name__ == '__main__':
                   hidden_size=net_kwargs['hidden_size'],
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
-<<<<<<< HEAD
         # TODO: check!!
-        net = torch.load(save_folder_net + '/net800.pth')
-=======
-        # find the newest net, which is the file with the highest number
-        net_files = [f for f in os.listdir(save_folder_net) if 'net' in f]
-        # find the number of the newest net file, being the file names net0, net1, net2, etc.
-        net_files = [int(f.split('net')[1].split('.pth')[0]) for f in net_files]
-        net_files.sort()
-        net_file = 'net'+str(net_files[-1])+'.pth'
-        net = torch.load(save_folder_net + '/'+net_file)
->>>>>>> 64907f8508f03fe5200cf28a7a26a08ec075bc93
+        load_net(save_folder_net)
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
@@ -250,7 +260,8 @@ if __name__ == '__main__':
         mean_perf_list.append(mean_perf)
         if mean_perf > 0.8:
             df = ft.dict2df(data)
-            GLM(df)
+            GLM_df = GLM(df)
+            plot_GLM(GLM_df)
 
         if i_net == 0:
             ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
