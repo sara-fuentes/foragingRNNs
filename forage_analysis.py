@@ -16,7 +16,8 @@ import sys
 import forage_training as ft
 import statsmodels.formula.api as smf
 import pandas as pd
-import seaborn as sns
+# import seaborn as sns
+import glob
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -169,32 +170,28 @@ def plot_mean_perf(ax, mean_performance_smooth):
     ax.set_ylabel('Mean performance')
 
 
-def plot_hist_mean_perf(ax, mean_perf_list):
-    ax.hist(mean_perf_list, bins=20)
+def plot_hist_mean_perf(ax, perfs):
+    ax.hist(perfs, bins=20)
     ax.set_xlabel('Mean performance')
     ax.set_ylabel('Frequency')
 
 
-def general_analysis(save_folder, perf_threshold, net_kwargs,
-                     env, env_kwargs, take_best, num_steps_exp=10000,
-                     debug=False):
+def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
 
-    # get seeds from folders in save_folder
-    seeds = [int(f) for f in os.listdir(save_folder) if
-             os.path.isdir(save_folder + '/' + f)]
+    # get seeds from folders in load_folder
+    seeds = [int(f) for f in os.listdir(load_folder) if
+             os.path.isdir(load_folder + '/' + f)]
 
     num_networks = len(seeds)
 
     # train several networks with different seeds
-    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
-    ax = ax.flatten()
     mean_perf_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
         print('Seed: ', seed)
         print(f'Net {i_net+1}/{num_networks}')
         # load data
-        save_folder_net = save_folder + '/' + str(seed)
+        save_folder_net = load_folder + '/' + str(seed)
         data_training = np.load(save_folder_net + '/data.npz',
                                 allow_pickle=True)
         # plot data
@@ -206,13 +203,13 @@ def general_analysis(save_folder, perf_threshold, net_kwargs,
                                               np.ones(roll)/roll, mode='valid')
         # check if mean performance is over a threshold at some point during
         # training
-        if np.max(mean_performance_smooth) > perf_threshold:
+        if np.max(mean_performance_smooth) > PERF_THRESHOLD:
             plot_mean_perf(ax=ax[0],
                            mean_performance_smooth=mean_performance_smooth)
 
         # load net
-        net = Net(input_size=net_kwargs['input_size'],
-                  hidden_size=net_kwargs['hidden_size'],
+        net = Net(input_size=NET_KWARGS['input_size'],
+                  hidden_size=NET_KWARGS['hidden_size'],
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
         # load network
@@ -226,33 +223,25 @@ def general_analysis(save_folder, perf_threshold, net_kwargs,
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
-        if mean_perf > perf_threshold:
+        if mean_perf > PERF_THRESHOLD:
             df = ft.dict2df(data)
             GLM_df = GLM(df)
             plot_GLM(ax=ax[3], GLM_df=GLM_df)
-
-        if i_net == 0:
-            ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
+            ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
                          save_folder=save_folder_net)
-
-    # histogram of mean performance
-    plot_hist_mean_perf(ax=ax[1], mean_perf_list=mean_perf_list)
-    # save figure
-    f.savefig(save_folder + '/performance_bests'+str(take_best)+'.png')
-    plt.show()
+    return mean_perf_list
 
 
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
     take_best = True
-    perf_threshold = 0.8
+    PERF_THRESHOLD = 0.8
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     env_seed = 8  # 7
-    num_periods = 4000  # 2000
     w_factor = 0.00001
     mean_ITI = 200
     max_ITI = 400
@@ -261,34 +250,44 @@ if __name__ == '__main__':
     blk_dur = 50
     probs = np.array([0.1, 0.9])
     # create folder to save data based on parameters
-    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                    f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
-                    f"prb{probs[0]}_seed{env_seed}")
-
-    # Set up the task
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
-                  'blk_dur': 20, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+    ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
+                'blk_dur': 20, 'timing':
+                    {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
                         # mean, min, max
                         'fixation': fix_dur, 'decision': dec_dur}} # Decision period
 
+    # Set up the task
     # call function to sample
-    env = gym.make(TASK, **env_kwargs)
+    env = gym.make(TASK, **ENV_KWARGS)
     env = pass_reward.PassReward(env)
     env = pass_action.PassAction(env)
     # set seed
-    env.seed(env_seed)
+    env.seed(123)
     env.reset()
 
-    net_kwargs = {'hidden_size': 64,
-                  'action_size': env.action_space.n,
-                  'input_size': env.observation_space.shape[0]}
+    NET_KWARGS = {'hidden_size': 64,
+                'action_size': env.action_space.n,
+                'input_size': env.observation_space.shape[0]}
 
-    TRAINING_KWARGS['env_kwargs'] = env_kwargs
-    TRAINING_KWARGS['net_kwargs'] = net_kwargs
-
-    general_analysis(save_folder=save_folder, perf_threshold=perf_threshold,
-                     net_kwargs=net_kwargs, env=env, env_kwargs=env_kwargs,
-                     take_best=take_best)
+    TRAINING_KWARGS['env_kwargs'] = ENV_KWARGS
+    TRAINING_KWARGS['net_kwargs'] = NET_KWARGS
+    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+    ax = ax.flatten()
+    mean_perf_all = []
+    for num_periods in [2000, 4000]:
+        save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                        f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
+                        f"prb{probs[0]}_seed")
+        # find folder with start equal to save_folder
+        files = glob.glob(save_folder+'*')
+        assert len(files) == 1
+        folder = files[0]
+        mean_perf_list = general_analysis(load_folder=folder, env=env, take_best=take_best, ax=ax)
+        mean_perf_all += mean_perf_list
+    # histogram of mean performance
+    plot_hist_mean_perf(ax=ax[1], perfs=mean_perf_all)
+    # save figure
+    f.savefig(save_folder + '/performance_bests'+str(take_best)+'.png')
+    plt.show()
                      
                 
