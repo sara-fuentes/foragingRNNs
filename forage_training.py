@@ -399,7 +399,7 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
             loss_1st_ep = loss.item()
         loss_1st_ep_list.append(loss_1st_ep)
         # print loss
-        if i_per % log_per == 0:
+        if i_per % log_per == log_per-1:
             print('------------')
             print('Period: ', i_per, 'of', num_periods)
             print('mean performance: ', data['mean_perf'])
@@ -723,13 +723,6 @@ if __name__ == '__main__':
         save_folder_net = save_folder + '/' + str(seed)
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
-<<<<<<< HEAD
-        
-        data_behav, net, df = train_network(num_epochs=num_epochs, num_periods=TRAINING_KWARGS['num_periods'],
-                                            num_steps_exp=num_steps_exp, criterion=criterion,
-                                            env=env, net_kwargs=net_kwargs, env_kwargs=env_kwargs,
-                                            debug=debug, seed=seed, save_folder=save_folder_net)
-=======
 
         data_behav, net, df = train_network(num_epochs=num_epochs,
                                             num_periods=TRAINING_KWARGS['num_periods'],
@@ -739,7 +732,6 @@ if __name__ == '__main__':
                                             env_kwargs=env_kwargs,
                                             debug=debug, seed=seed,
                                             save_folder=save_folder_net)
->>>>>>> 02fbd28955bc6ab8552b9bb6ded18c736d1d3443
         # save data as npz
         # TODO: use npy?
         np.savez(save_folder_net + '/data.npz', **data_behav)
