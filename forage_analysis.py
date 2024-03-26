@@ -17,17 +17,8 @@ import forage_training as ft
 import statsmodels.formula.api as smf
 import pandas as pd
 import seaborn as sns
-sys.path.append('C:/Users/saraf/anaconda3/Lib/site-packages')
-sys.path.append('C:/Users/saraf')
-# packages to save data
-# packages to handle data
-# packages to visualize data
-# import gym and neurogym to create tasks
-# from neurogym.utils import plotting
-# import torch and neural network modules to build RNNs
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-PATH = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/entire_net.pth'
 
 # name of the task on the neurogym library
 TASK = 'ForagingBlocks-v0'
@@ -128,52 +119,62 @@ def plot_GLM(ax, GLM_df):
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
     intercept = GLM_df.loc['Intercept', "coefficient"]
-    # TODO: put code to plot in another function
-    plt.figure(figsize=(10, 6))
+    ax.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
+    ax.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
+    ax.axhline(y=intercept, label='Intercept', color='black')
+    ax.axhline(y=0, color='gray', linestyle='--')
 
-    ax[3].plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
-    ax[3].plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
-    ax[3].axhline(y=intercept, label='Intercept', color='black')
-    ax[3].axhline(y=0, color='gray', linestyle='--')
+    ax.set_ylabel('GLM weight')
+    ax.set_xlabel('Previous trials')
+    ax.legend()
+    # plt.figure(figsize=(10, 6))
 
-    ax[3].ylabel('GLM weight')
-    ax[3].xlabel('Previous trials')
-    ax[3].legend()
     # sns.despine()
     # plt.show()
     # plt.savefig(str(data_folder) + 'ALL_Subject_GLM_Previous_choice.png',
     # transparent=False)
 
 
-def load_net(save_folder_net):
+def load_net(save_folder, performance, take_best=True):
     # check if net.pth exists in the folder (for nets that have not been saved
     # several times during training)
-    net_pth_path = os.path.join(save_folder_net, 'net.pth')
+    net_pth_path = os.path.join(save_folder, 'net.pth')
     if os.path.exists(net_pth_path):
         # If net.pth exists, load it directly
         net = torch.load(net_pth_path)
     else:
         # If net.pth doesn't exist, find the newest net,
         # which is the file with the highest number
-        net_files = [f for f in os.listdir(save_folder_net) if 'net' in f]
+        net_files = [f for f in os.listdir(save_folder) if 'net' in f]
         # find the number of the newest net file, being the file names net0, net1, net2, etc.
-        net_files = [int(f.split('net')[1].split('.pth')[0]) for f in net_files]
-        net_files.sort()
-        net_file = 'net'+str(net_files[-1])+'.pth'
-        net_path = os.path.join(save_folder_net, net_file)
+        net_files = np.array([int(f.split('net')[1].split('.pth')[0]) for f in net_files])
+        if take_best:
+            # find the best net based on performance
+            best_net = np.argmax(performance)
+            # find closest network in net_files
+            index = np.argmin(np.abs(net_files - best_net))
+            network_number = net_files[index]
+        else:
+            net_files.sort()
+            network_number = net_files[-1]
+        net_file = 'net'+str(network_number)+'.pth'
+        net_path = os.path.join(save_folder, net_file)
         net = torch.load(net_path)
+    return net
 
     
 
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
+    take_best = True
+    perf_threshold = 0.8
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
-    env_seed = 7
-    num_periods = 2000
+    env_seed = 8 # 7
+    num_periods = 4000 # 2000
     w_factor = 0.00001
     mean_ITI = 200
     max_ITI = 400
@@ -186,9 +187,6 @@ if __name__ == '__main__':
                    f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
                    f"prb{probs[0]}_seed{env_seed}")
 
-    # get seeds from folders in save_folder
-    seeds = [int(f) for f in os.listdir(save_folder) if
-             os.path.isdir(save_folder + '/' + f)]
     # Set up the task
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': np.array([0, 1]),
                   'blk_dur': 20, 'timing':
@@ -211,8 +209,13 @@ if __name__ == '__main__':
     TRAINING_KWARGS['env_kwargs'] = env_kwargs
     TRAINING_KWARGS['net_kwargs'] = net_kwargs
 
-    num_steps_exp = 10000
-    debug = False
+    # TODO: create general analysis function from here
+    num_steps_exp = 10000 # parameter with default value
+    debug = False # parameter with default value
+     # get seeds from folders in save_folder
+    seeds = [int(f) for f in os.listdir(save_folder) if
+             os.path.isdir(save_folder + '/' + f)]
+
     num_networks = len(seeds)
 
     # train several networks with different seeds
@@ -222,7 +225,6 @@ if __name__ == '__main__':
     for i_net in range(num_networks):
         seed = seeds[i_net]
         print('Seed: ', seed)
-        # print net number and total number of nets
         print(f'Net {i_net+1}/{num_networks}')
         # load data
         save_folder_net = save_folder + '/' + str(seed)
@@ -231,14 +233,13 @@ if __name__ == '__main__':
         # plot data
         # get mean performance from data
         mean_performance = data_training['mean_perf_list']
-        # ax[0].plot(mean_performance, label='Net ' + str(net))
         # smooth mean performance
         roll = 20
         mean_performance_smooth = np.convolve(mean_performance,
                                               np.ones(roll)/roll, mode='valid')
         # check if mean performance is over a threshold at some point during
         # training
-        if np.max(mean_performance_smooth) > 0.7:
+        if np.max(mean_performance_smooth) > perf_threshold:
             ax[0].plot(mean_performance_smooth, label='Net ' + str(i_net) +
                        ' smooth')
             ax[0].set_xlabel('Epochs')
@@ -249,8 +250,8 @@ if __name__ == '__main__':
                   hidden_size=net_kwargs['hidden_size'],
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
-        # TODO: check!!
-        load_net(save_folder_net)
+        # load network
+        net = load_net(save_folder=save_folder_net, performance=mean_performance_smooth, take_best=take_best)
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
@@ -258,10 +259,10 @@ if __name__ == '__main__':
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
-        if mean_perf > 0.8:
+        if mean_perf > perf_threshold:
             df = ft.dict2df(data)
             GLM_df = GLM(df)
-            plot_GLM(GLM_df)
+            plot_GLM(ax=ax[3], GLM_df=GLM_df)
 
         if i_net == 0:
             ft.plot_task(env_kwargs=env_kwargs, data=data, num_steps=100,
@@ -272,6 +273,6 @@ if __name__ == '__main__':
     ax[1].set_xlabel('Mean performance')
     ax[1].set_ylabel('Frequency')
     # save figure
-    f.savefig(save_folder + '/performance.png')
+    f.savefig(save_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
 
