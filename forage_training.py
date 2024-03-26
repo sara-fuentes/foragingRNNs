@@ -308,6 +308,7 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     plt.tight_layout()
     if save_folder is not None:
         plt.savefig(save_folder + '/task.png')
+        plt.close(f)
 
 
 def dict2df(data):

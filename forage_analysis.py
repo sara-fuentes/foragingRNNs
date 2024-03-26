@@ -113,27 +113,25 @@ def GLM(df):
 
     return GLM_df
 
-def plot_GLM(ax, GLM_df):
+def plot_GLM(ax, GLM_df, save_folder):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separately the coefficients
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
     intercept = GLM_df.loc['Intercept', "coefficient"]
-    ax.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
-    ax.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
-    ax.axhline(y=intercept, label='Intercept', color='black')
-    ax.axhline(y=0, color='gray', linestyle='--')
+    f, ax_ind = plt.subplots(1, 1, figsize=(10, 6))
+    for a in [ax, ax_ind]:
+        a.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
+        a.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
+    ax_ind.axhline(y=intercept, label='Intercept', color='black')
+    ax_ind.axhline(y=0, color='gray', linestyle='--')
 
-    ax.set_ylabel('GLM weight')
-    ax.set_xlabel('Previous trials')
-    ax.legend()
-    # plt.figure(figsize=(10, 6))
-
-    # sns.despine()
-    # plt.show()
-    # plt.savefig(str(data_folder) + 'ALL_Subject_GLM_Previous_choice.png',
-    # transparent=False)
+    ax_ind.set_ylabel('GLM weight')
+    ax_ind.set_xlabel('Previous trials')
+    ax_ind.legend()
+    f.savefig(save_folder + '/GLM_weights.png')
+    plt.close(f)
 
 
 def load_net(save_folder, performance, take_best=True):
@@ -226,7 +224,7 @@ def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
         if mean_perf > PERF_THRESHOLD:
             df = ft.dict2df(data)
             GLM_df = GLM(df)
-            plot_GLM(ax=ax[3], GLM_df=GLM_df)
+            plot_GLM(ax=ax[3], GLM_df=GLM_df, save_folder=save_folder_net)
             ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
                          save_folder=save_folder_net)
     return mean_perf_list
@@ -287,7 +285,12 @@ if __name__ == '__main__':
     # histogram of mean performance
     plot_hist_mean_perf(ax=ax[1], perfs=mean_perf_all)
     # save figure
-    f.savefig(save_folder + '/performance_bests'+str(take_best)+'.png')
+    ax[3].axhline(y=0, color='gray', linestyle='--')
+
+    ax[3].set_ylabel('GLM weight')
+    ax[3].set_xlabel('Previous trials')
+    ax[3].legend()
+    f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
                      
                 
