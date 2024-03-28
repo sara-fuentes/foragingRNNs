@@ -141,6 +141,7 @@ def load_net(save_folder, performance, take_best=True):
     if os.path.exists(net_pth_path):
         # If net.pth exists, load it directly
         net = torch.load(net_pth_path)
+        network_number = 0
     else:
         # If net.pth doesn't exist, find the newest net,
         # which is the file with the highest number
@@ -159,7 +160,7 @@ def load_net(save_folder, performance, take_best=True):
         net_file = 'net'+str(network_number)+'.pth'
         net_path = os.path.join(save_folder, net_file)
         net = torch.load(net_path)
-    return net
+    return net, network_number
 
 
 def plot_mean_perf(ax, mean_performance_smooth):
@@ -183,11 +184,12 @@ def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
     num_networks = len(seeds)
 
     # train several networks with different seeds
-    mean_perf_list = []
+    mean_perfs = []
+    net_nums = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
-        print('Seed: ', seed)
-        print(f'Net {i_net+1}/{num_networks}')
+        # print('Seed: ', seed)
+        # print(f'Net {i_net+1}/{num_networks}')
         # load data
         save_folder_net = load_folder + '/' + str(seed)
         data_training = np.load(save_folder_net + '/data.npz',
@@ -211,23 +213,25 @@ def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
         # load network
-        net = load_net(save_folder=save_folder_net,
-                       performance=mean_performance_smooth,
-                       take_best=take_best)
+        net, network_number = load_net(save_folder=save_folder_net,
+                                       performance=mean_performance_smooth,
+                                       take_best=take_best)
+        net_nums.append(network_number)
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
         perf = np.array(data['perf'])
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
-        mean_perf_list.append(mean_perf)
+        mean_perfs.append(mean_perf)
         if mean_perf > PERF_THRESHOLD:
+            print('Seed: ', seed)
             df = ft.dict2df(data)
             GLM_df = GLM(df)
             plot_GLM(ax=ax[3], GLM_df=GLM_df, save_folder=save_folder_net)
             ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
                          save_folder=save_folder_net)
-    return mean_perf_list
+    return mean_perfs, seeds, net_nums
 
 
 # --- MAIN
@@ -272,16 +276,21 @@ if __name__ == '__main__':
     f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
     ax = ax.flatten()
     mean_perf_all = []
+    seeds_all = []
+    net_nums_all = []
     for num_periods in [2000, 4000]:
         save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                         f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
                         f"prb{probs[0]}_seed")
+        print(save_folder)
         # find folder with start equal to save_folder
         files = glob.glob(save_folder+'*')
         assert len(files) == 1
         folder = files[0]
-        mean_perf_list = general_analysis(load_folder=folder, env=env, take_best=take_best, ax=ax)
-        mean_perf_all += mean_perf_list
+        mean_perfs, seeds, net_nums = general_analysis(load_folder=folder, env=env, take_best=take_best, ax=ax)
+        mean_perf_all += mean_perfs
+        seeds_all += seeds
+        net_nums_all += net_nums
     # histogram of mean performance
     plot_hist_mean_perf(ax=ax[1], perfs=mean_perf_all)
     # save figure
@@ -292,5 +301,6 @@ if __name__ == '__main__':
     ax[3].legend()
     f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
-                     
-                
+    data = {'mean_perfs': mean_perf_all, 'seeds': seeds_all, 'net_nums': net_nums_all}
+    # save data
+    np.savez(main_folder + '/mean_perfs_seeds'+str(take_best)+'.npz', **data)
