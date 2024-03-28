@@ -116,7 +116,7 @@ def GLM(df):
 def plot_GLM(ax, GLM_df, save_folder):
     orders = np.arange(len(GLM_df))
 
-    # filter the DataFrame to separately the coefficients
+    # filter the DataFrame to separate the coefficients
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
     intercept = GLM_df.loc['Intercept', "coefficient"]
@@ -145,8 +145,10 @@ def load_net(save_folder, performance, take_best=True):
         # If net.pth doesn't exist, find the newest net,
         # which is the file with the highest number
         net_files = [f for f in os.listdir(save_folder) if 'net' in f]
-        # find the number of the newest net file, being the file names net0, net1, net2, etc.
-        net_files = np.array([int(f.split('net')[1].split('.pth')[0]) for f in net_files])
+        # find the number of the newest net file, being the file names net0,
+        # net1, net2, etc.
+        net_files = np.array([int(f.split('net')[1].split('.pth')[0]) for f in
+                              net_files])
         if take_best:
             # find the best net based on performance
             best_net = np.argmax(performance)
@@ -174,7 +176,7 @@ def plot_hist_mean_perf(ax, perfs):
     ax.set_ylabel('Frequency')
 
 
-def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
+def general_analysis(load_folder, env, take_best, num_steps_exp=50000):
 
     # get seeds from folders in load_folder
     seeds = [int(f) for f in os.listdir(load_folder) if
@@ -182,8 +184,12 @@ def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
 
     num_networks = len(seeds)
 
+    mean_perf_smooth_list = []
+
     # train several networks with different seeds
     mean_perf_list = []
+    GLM_df_list = []
+    data_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
         print('Seed: ', seed)
@@ -199,11 +205,7 @@ def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
         roll = 20
         mean_performance_smooth = np.convolve(mean_performance,
                                               np.ones(roll)/roll, mode='valid')
-        # check if mean performance is over a threshold at some point during
-        # training
-        if np.max(mean_performance_smooth) > PERF_THRESHOLD:
-            plot_mean_perf(ax=ax[0],
-                           mean_performance_smooth=mean_performance_smooth)
+        mean_perf_smooth_list.append(mean_performance_smooth)
 
         # load net
         net = Net(input_size=NET_KWARGS['input_size'],
@@ -217,17 +219,40 @@ def general_analysis(load_folder, env, take_best, ax, num_steps_exp=50000):
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
+        data_list.append(data)
         perf = np.array(data['perf'])
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
+        idx_perf = []
         if mean_perf > PERF_THRESHOLD:
+            idx_perf.append(i_net)
             df = ft.dict2df(data)
             GLM_df = GLM(df)
-            plot_GLM(ax=ax[3], GLM_df=GLM_df, save_folder=save_folder_net)
-            ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
-                         save_folder=save_folder_net)
-    return mean_perf_list
+            GLM_df_list.append(GLM_df)
+
+    return seeds, mean_perf_list, mean_perf_smooth_list, GLM_df_list, data_list, idx_perf
+
+
+def plot_general_analysis( mean_perf_smooth_list, GLM_df_list, data_list, save_folder, mean_perf_all, idx_perf,
+                          main_folder, take_best):
+    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+    ax = ax.flatten()
+    for perf in mean_perf_smooth_list:
+        if np.max(perf) > PERF_THRESHOLD:
+            plot_mean_perf(ax=ax[0], mean_performance_smooth=perf)
+        plot_hist_mean_perf(ax=ax[1], perfs=mean_perf_all)
+    for i in range(GLM_df_list):
+        plot_GLM(ax=ax[2], GLM_df=GLM_df_list[i], save_folder=save_folder)
+    ax[2].axhline(y=0, color='gray', linestyle='--')
+    ax[2].set_ylabel('GLM weight')
+    ax[2].set_xlabel('Previous trials')
+    ax[2].legend()    
+    ft.plot_task(env_kwargs=ENV_KWARGS, data=data_list[idx_perf[i]], num_steps=100,
+                         save_folder=save_folder)
+  
+    f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
+    plt.show()
 
 
 # --- MAIN
@@ -236,8 +261,8 @@ if __name__ == '__main__':
     take_best = True
     PERF_THRESHOLD = 0.8
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     env_seed = 8  # 7
     w_factor = 0.00001
@@ -269,8 +294,7 @@ if __name__ == '__main__':
 
     TRAINING_KWARGS['env_kwargs'] = ENV_KWARGS
     TRAINING_KWARGS['net_kwargs'] = NET_KWARGS
-    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
-    ax = ax.flatten()
+
     mean_perf_all = []
     for num_periods in [2000, 4000]:
         save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
@@ -280,17 +304,11 @@ if __name__ == '__main__':
         files = glob.glob(save_folder+'*')
         assert len(files) == 1
         folder = files[0]
-        mean_perf_list = general_analysis(load_folder=folder, env=env, take_best=take_best, ax=ax)
+        seeds, mean_perf_list, mean_perf_smooth_list, GLM_df_list, data_list, idx_perf = \
+        general_analysis(load_folder=folder, env=env, take_best=take_best)
         mean_perf_all += mean_perf_list
-    # histogram of mean performance
-    plot_hist_mean_perf(ax=ax[1], perfs=mean_perf_all)
-    # save figure
-    ax[3].axhline(y=0, color='gray', linestyle='--')
-
-    ax[3].set_ylabel('GLM weight')
-    ax[3].set_xlabel('Previous trials')
-    ax[3].legend()
-    f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
-    plt.show()
                      
-                
+    plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_list, GLM_df_list=GLM_df_list,
+                        data_list=data_list, save_folder=save_folder, # ?
+                        mean_perf_all=mean_perf_all,
+                        idx_perf=idx_perf, main_folder=main_folder, take_best=take_best)           
