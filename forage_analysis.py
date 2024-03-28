@@ -113,25 +113,21 @@ def GLM(df):
 
     return GLM_df
 
-def plot_GLM(ax, GLM_df, save_folder):
+def plot_GLM(ax, GLM_df):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
     intercept = GLM_df.loc['Intercept', "coefficient"]
-    f, ax_ind = plt.subplots(1, 1, figsize=(10, 6))
-    for a in [ax, ax_ind]:
-        a.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
-        a.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
-    ax_ind.axhline(y=intercept, label='Intercept', color='black')
-    ax_ind.axhline(y=0, color='gray', linestyle='--')
+    ax.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
+    ax.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
+    ax.axhline(y=intercept, label='Intercept', color='black')
+    ax.axhline(y=0, color='gray', linestyle='--')
 
-    ax_ind.set_ylabel('GLM weight')
-    ax_ind.set_xlabel('Previous trials')
-    ax_ind.legend()
-    f.savefig(save_folder + '/GLM_weights.png')
-    plt.close(f)
+    ax.set_ylabel('GLM weight')
+    ax.set_xlabel('Previous trials')
+    ax.legend()
 
 
 def load_net(save_folder, performance, take_best=True):
@@ -177,7 +173,7 @@ def plot_hist_mean_perf(ax, perfs):
     ax.set_ylabel('Frequency')
 
 
-def general_analysis(load_folder, env, take_best, num_steps_exp=50000):
+def general_analysis(load_folder, env, take_best, num_steps_exp=50000, verbose=False):
 
     # get seeds from folders in load_folder
     seeds = [int(f) for f in os.listdir(load_folder) if
@@ -185,13 +181,12 @@ def general_analysis(load_folder, env, take_best, num_steps_exp=50000):
 
     num_networks = len(seeds)
 
-    mean_perf_smooth_list = []
 
     # train several networks with different seeds
     net_nums = []
     mean_perf_list = []
-    GLM_df_list = []
-    data_list = []
+    GLM_coeffs = pd.DataFrame()
+    mean_perf_smooth_list = []
     for i_net in range(num_networks):
         seed = seeds[i_net]
         # print('Seed: ', seed)
@@ -222,37 +217,50 @@ def general_analysis(load_folder, env, take_best, num_steps_exp=50000):
         # test net
         data = ft.run_agent_in_environment(num_steps_exp=num_steps_exp,
                                            env=env, net=net)
-        data_list.append(data)
         perf = np.array(data['perf'])
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
-        idx_perf = []
         if mean_perf > PERF_THRESHOLD:
-            idx_perf.append(i_net)
+            print(f'Net {i_net+1}/{num_networks} with seed {seed} has a mean performance of {mean_perf}')
             df = ft.dict2df(data)
             GLM_df = GLM(df)
-            GLM_df_list.append(GLM_df)
+            # add column with network number
+            GLM_df['seed'] = seed
+            GLM_coeffs = pd.concat([GLM_coeffs, GLM_df], axis=0)
+            if verbose:
+                ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
+                                    save_folder=save_folder_net)
+                f, ax_ind = plt.subplots(1, 1, figsize=(10, 6))
+                plot_GLM(ax=ax_ind, GLM_df=GLM_df)
+                f.savefig(save_folder_net + '/GLM_weights.png')
+                plt.close(f)
 
-    return seeds, mean_perf_list, mean_perf_smooth_list, GLM_df_list, data_list, idx_perf, net_nums
+    return seeds, mean_perf_list, mean_perf_smooth_list, GLM_coeffs, net_nums
 
 
-def plot_general_analysis( mean_perf_smooth_list, GLM_df_list, data_list, save_folder, mean_perf_all, idx_perf,
-                          main_folder, take_best):
+def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf_all,
+                          main_folder, take_best, seeds):
     f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
     ax = ax.flatten()
+    # plot mean performance
     for perf in mean_perf_smooth_list:
         if np.max(perf) > PERF_THRESHOLD:
             plot_mean_perf(ax=ax[0], mean_performance_smooth=perf)
         plot_hist_mean_perf(ax=ax[1], perfs=mean_perf_all)
-    for i in range(GLM_df_list):
-        plot_GLM(ax=ax[2], GLM_df=GLM_df_list[i], save_folder=save_folder)
+    # plot GLM and task behavior
+    # get seeds from df
+    seeds = GLM_coeffs['seed'].unique()
+    for s in seeds:
+        # get all rows with seed s
+        i = GLM_coeffs['seed'] == s
+        GLM_df = GLM_coeffs.loc[:, i]
+        plot_GLM(ax=ax[2], GLM_df=GLM_df)
+
     ax[2].axhline(y=0, color='gray', linestyle='--')
     ax[2].set_ylabel('GLM weight')
     ax[2].set_xlabel('Previous trials')
     ax[2].legend()    
-    ft.plot_task(env_kwargs=ENV_KWARGS, data=data_list[idx_perf[i]], num_steps=100,
-                         save_folder=save_folder)
   
     f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
@@ -265,7 +273,7 @@ if __name__ == '__main__':
     PERF_THRESHOLD = 0.8
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     env_seed = 8  # 7
     w_factor = 0.00001
@@ -301,20 +309,25 @@ if __name__ == '__main__':
     mean_perf_all = []
     seeds_all = []
     net_nums_all = []
+    mean_perf_smooth_all = []
+    GLM_coeffs_all = pd.DataFrame()
     for num_periods in [2000, 4000]:
-        save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                        f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
-                        f"prb{probs[0]}_seed")
-        print(save_folder)
+        candidate_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                            f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
+                            f"prb{probs[0]}_seed")
+        print(candidate_folder)
         # find folder with start equal to save_folder
-        files = glob.glob(save_folder+'*')
+        files = glob.glob(candidate_folder+'*')
         assert len(files) == 1
         folder = files[0]
-        seeds, mean_perf_list, mean_perf_smooth_list, GLM_df_list, data_list, idx_perf = \
-        general_analysis(load_folder=folder, env=env, take_best=take_best)
+        seeds, mean_perf_list, mean_perf_smooth_list, GLM_coeffs, net_nums = \
+        general_analysis(load_folder=folder, env=env, take_best=take_best, num_steps_exp=1000)
         mean_perf_all += mean_perf_list
-                     
-    plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_list, GLM_df_list=GLM_df_list,
-                        data_list=data_list, save_folder=save_folder, # ?
-                        mean_perf_all=mean_perf_all,
-                        idx_perf=idx_perf, main_folder=main_folder, take_best=take_best)           
+        seeds_all += seeds
+        net_nums_all += net_nums
+        mean_perf_smooth_all += mean_perf_smooth_list
+        GLM_coeffs_all = pd.concat([GLM_coeffs_all, GLM_coeffs], axis=0)    
+    plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_all, GLM_coeffs=GLM_coeffs_all,
+                          mean_perf_all=mean_perf_all, seeds=seeds_all,
+                          main_folder=main_folder, take_best=take_best)
+    # TODO: save data         
