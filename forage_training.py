@@ -699,11 +699,12 @@ if __name__ == '__main__':
 
     # create folder to save data based on parameters
     save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                   f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
-                   f"prb{probs[0]}_seed{env_seed}")
+                   f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
+                   f"prb{probs[0]}")
 
     # create folder to save data based on env seed
-    os.makedirs(save_folder, exist_ok=True)
+    os.makedirs(save_folder + 'n_pers_'+np.round(num_periods/1e3, 1)+'k_'+'s_'+str(env_seed),
+                exist_ok=True)
 
     # Save config as npz
     np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)

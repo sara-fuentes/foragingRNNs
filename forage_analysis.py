@@ -297,6 +297,7 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
 
+# TODO: create a function that tests the network in different environments
 
 # --- MAIN
 if __name__ == '__main__':
@@ -304,8 +305,8 @@ if __name__ == '__main__':
     take_best = True
     PERF_THRESHOLD = 0.8
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     env_seed = 8  # 7
     w_factor = 0.00001
@@ -321,6 +322,8 @@ if __name__ == '__main__':
                     {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
                         # mean, min, max
                         'fixation': fix_dur, 'decision': dec_dur}} # Decision period
+    # TODO: get env_test as kwargs
+    ENV_KWARGS.update(env_test)
 
     # Set up the task
     # call function to sample
@@ -339,27 +342,30 @@ if __name__ == '__main__':
     TRAINING_KWARGS['net_kwargs'] = NET_KWARGS
 
     mean_perf_all = []
-    seeds_all = []
+    nets_seeds_all = []
     net_nums_all = []
     mean_perf_smooth_all = []
     iti_list_all = np.array([])
     mean_perf_iti_all = []
     GLM_coeffs_all = pd.DataFrame()
-    for num_periods in [2000, 4000]:
-        candidate_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                            f"d{dec_dur}_n{np.round(num_periods/1e3, 1)}_nb{np.round(blk_dur/1e3, 1)}_"
-                            f"prb{probs[0]}_seed")
-        print(candidate_folder)
+    # TODO: move this to a function
+    folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+              f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
+              f"prb{probs[0]}")
+    files = glob.glob(folder+'/*')
+
+    for f in files:
+        # get num periods from folder name save_folder + 'n_pers_'+np.round(num_periods/1e3, 1)+'k'
+        num_periods = int(f.split('n_pers_')[1].split('k')[0]*1e3)
+        # get seed
+        seed = int(f.split('_s')[1][0])
         # find folder with start equal to save_folder
-        files = glob.glob(candidate_folder+'*')
-        assert len(files) == 1
-        folder = files[0]
         seeds, mean_perf_list, mean_perf_smooth_list, iti_list, \
             mean_perf_iti, GLM_coeffs, net_nums = \
-            general_analysis(load_folder=folder, env=env,
+            general_analysis(load_folder=f, env=env,
                              take_best=take_best, num_steps_exp=1000)
         mean_perf_all += mean_perf_list
-        seeds_all += seeds
+        nets_seeds_all += seeds
         net_nums_all += net_nums
         mean_perf_smooth_all += mean_perf_smooth_list
         iti_list_all = np.concatenate((iti_list_all, iti_list))
@@ -371,6 +377,10 @@ if __name__ == '__main__':
                           mean_perf=mean_perf_all,
                           iti_list=iti_list_all,
                           mean_perf_iti=mean_perf_iti_all,
-                          seeds=seeds_all,
+                          seeds=nets_seeds_all,
                           main_folder=main_folder, take_best=take_best)
-    # TODO: save data         
+    # save data
+    GLM_coeffs_all.to_csv(folder + '/GLM_coeffs.csv')
+    data = {'mean_perf_all': mean_perf_all, 'nets_seeds_all': nets_seeds_all, 'net_nums_all': net_nums_all,
+            'iti': iti_list_all, 'mean_perf_iti_all': mean_perf_iti_all, 'folders': files}
+    np.savez(folder + '/data_analysis.npz', **data)
