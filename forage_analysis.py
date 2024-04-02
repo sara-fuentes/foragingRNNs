@@ -327,7 +327,8 @@ def test_networks(main_folder, task_params, take_best, plot=True, **env_test):
               f"d{task_params['dec_dur']}_nb{np.round(task_params['blk_dur']/1e3, 1)}_"
               f"prb{task_params['probs'][0]}")
     files = glob.glob(folder+'/*')
-
+    # get only files with n_pers in name
+    files = [f for f in files if 'n_pers' in f]
     for f in files:
         # get num periods from folder name save_folder + 'n_pers_'+np.round
         # (num_periods/1e3, 1)+'k'
@@ -337,8 +338,8 @@ def test_networks(main_folder, task_params, take_best, plot=True, **env_test):
         # find folder with start equal to save_folder
         seeds, mean_perf_list, mean_perf_smooth_list, iti_list, \
             mean_perf_iti, GLM_coeffs, net_nums = \
-            general_analysis(load_folder=f, env=env,
-                             take_best=take_best, num_steps_exp=1000)
+            general_analysis(load_folder=f, env=env, take_best=take_best,
+                             num_steps_exp=num_steps_tests, verbose=verbose)
         mean_perf_all += mean_perf_list
         nets_seeds_all += seeds
         net_nums_all += net_nums
