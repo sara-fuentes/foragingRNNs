@@ -232,19 +232,19 @@ def general_analysis(load_folder, env, take_best, num_steps_exp=50000,
         perf = perf[perf != -1]
         mean_perf = np.mean(perf)
         mean_perf_list.append(mean_perf)
-        # performance by iti
-        iti_mat = np.array(data['iti'])
-        # list of unique ITIs
-        iti_list = np.unique(iti_mat)
-        # list of performances for each unique ITI
-        mean_performance = []
-        for iti in iti_list:
-            mean_performance.append(np.mean(perf[iti_mat == iti]))
-        mean_perf_iti.append(mean_performance)
 
         if mean_perf > PERF_THRESHOLD:
             print(f'Net {i_net+1}/{num_networks} with seed {seed} has a'
                   'meanperformance of {mean_perf}')
+            # performance by iti
+            iti_mat = np.array(data['iti'])
+            # list of unique ITIs
+            iti_list = np.unique(iti_mat)
+            # list of performances for each unique ITI
+            mean_performance = []
+            for iti in iti_list:
+                mean_performance.append(np.mean(perf[iti_mat == iti]))
+            mean_perf_iti.append(mean_performance)
             df = ft.dict2df(data)
             GLM_df = GLM(df)
             # add column with network number
@@ -305,9 +305,10 @@ if __name__ == '__main__':
     take_best = True
     PERF_THRESHOLD = 0.8
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
+    
     env_seed = 8  # 7
     w_factor = 0.00001
     mean_ITI = 200
@@ -323,7 +324,7 @@ if __name__ == '__main__':
                         # mean, min, max
                         'fixation': fix_dur, 'decision': dec_dur}} # Decision period
     # TODO: get env_test as kwargs
-    ENV_KWARGS.update(env_test)
+    # ENV_KWARGS.update(env_test)
 
     # Set up the task
     # call function to sample
@@ -356,7 +357,7 @@ if __name__ == '__main__':
 
     for f in files:
         # get num periods from folder name save_folder + 'n_pers_'+np.round(num_periods/1e3, 1)+'k'
-        num_periods = int(f.split('n_pers_')[1].split('k')[0]*1e3)
+        num_periods = int(float(f.split('n_pers_')[1].split('k')[0])*1e3)
         # get seed
         seed = int(f.split('_s')[1][0])
         # find folder with start equal to save_folder
