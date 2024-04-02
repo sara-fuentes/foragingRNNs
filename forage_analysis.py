@@ -303,10 +303,12 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
 if __name__ == '__main__':
     plt.close('all')
     take_best = True
+    num_steps_tests = 50000
+    verbose = True
     PERF_THRESHOLD = 0.8
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     
     env_seed = 8  # 7
@@ -354,7 +356,8 @@ if __name__ == '__main__':
               f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
               f"prb{probs[0]}")
     files = glob.glob(folder+'/*')
-
+    # get only files with n_pers in name
+    files = [f for f in files if 'n_pers' in f]
     for f in files:
         # get num periods from folder name save_folder + 'n_pers_'+np.round(num_periods/1e3, 1)+'k'
         num_periods = int(float(f.split('n_pers_')[1].split('k')[0])*1e3)
@@ -363,8 +366,8 @@ if __name__ == '__main__':
         # find folder with start equal to save_folder
         seeds, mean_perf_list, mean_perf_smooth_list, iti_list, \
             mean_perf_iti, GLM_coeffs, net_nums = \
-            general_analysis(load_folder=f, env=env,
-                             take_best=take_best, num_steps_exp=1000)
+            general_analysis(load_folder=f, env=env, take_best=take_best,
+                             num_steps_exp=num_steps_tests, verbose=verbose)
         mean_perf_all += mean_perf_list
         nets_seeds_all += seeds
         net_nums_all += net_nums
@@ -379,7 +382,7 @@ if __name__ == '__main__':
                           iti_list=iti_list_all,
                           mean_perf_iti=mean_perf_iti_all,
                           seeds=nets_seeds_all,
-                          main_folder=main_folder, take_best=take_best)
+                          main_folder=folder, take_best=take_best)
     # save data
     GLM_coeffs_all.to_csv(folder + '/GLM_coeffs.csv')
     data = {'mean_perf_all': mean_perf_all, 'nets_seeds_all': nets_seeds_all, 'net_nums_all': net_nums_all,
