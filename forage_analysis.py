@@ -296,7 +296,8 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     plt.show()
 
 
-def test_networks(main_folder, task_params, take_best, plot=True, **env_test):
+def test_networks(main_folder, task_params, take_best, verbose, num_steps_tests = 50000,
+                  plot=True, **env_test):
     # Set up the task
     # call function to sample
     ENV_KWARGS.update(env_test)
@@ -355,7 +356,7 @@ def test_networks(main_folder, task_params, take_best, plot=True, **env_test):
                               iti_list=iti_list_all,
                               mean_perf_iti=mean_perf_iti_all,
                               seeds=nets_seeds_all,
-                              main_folder=main_folder, take_best=take_best)
+                              main_folder=folder, take_best=take_best)
     # save data
     GLM_coeffs_all.to_csv(folder + '/GLM_coeffs.csv')
     data = {'mean_perf_all': mean_perf_all, 'nets_seeds_all': nets_seeds_all,
@@ -370,6 +371,8 @@ def test_networks(main_folder, task_params, take_best, plot=True, **env_test):
 if __name__ == '__main__':
     plt.close('all')
     take_best = True
+    num_steps_tests = 50000
+    verbose = True
     PERF_THRESHOLD = 0.7
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
@@ -410,4 +413,5 @@ if __name__ == '__main__':
                   'action_size': env.action_space.n,
                   'input_size': env.observation_space.shape[0]}
 
-    test_networks(main_folder, task_params, take_best, plot=True)
+    test_networks(main_folder=main_folder, task_params=task_params, take_best=take_best,verbose=verbose,
+                  num_steps_tests=50000, plot=True)
