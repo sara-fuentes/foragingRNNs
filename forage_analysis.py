@@ -261,15 +261,20 @@ def general_analysis(load_folder, env, take_best, num_steps_exp=50000,
 
 
 def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
-                          iti_list, mean_perf_iti, main_folder,
+                          iti_list, mean_perf_iti, sv_folder,
                           take_best, seeds):
-    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+    # check if figure exists
+    if not os.path.exists(sv_folder + '/training_performance.png'):
+        f, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5))
+        # plot mean performance
+        for perf in mean_perf_smooth_list:
+            plot_mean_perf(ax=ax, mean_performance_smooth=perf)
+        ax.axhline(y=PERF_THRESHOLD, color='gray', linestyle='--')
+        f.savefig(sv_folder + '/training_performance.png')
+    
+    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 5))
     ax = ax.flatten()
-    # plot mean performance
-    for perf in mean_perf_smooth_list:
-        if np.max(perf) > PERF_THRESHOLD:
-            plot_mean_perf(ax=ax[0], mean_performance_smooth=perf)
-        plot_hist_mean_perf(ax=ax[1], perfs=mean_perf)
+    plot_hist_mean_perf(ax=ax[0], perfs=mean_perf)
     # plot GLM and task behavior
     # get seeds from df
     seeds = GLM_coeffs['seed'].unique()
@@ -277,43 +282,26 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
         # get all rows with seed s
         i = GLM_coeffs['seed'] == s
         GLM_df = GLM_coeffs.loc[i]
-        plot_GLM(ax=ax[2], GLM_df=GLM_df)
+        plot_GLM(ax=ax[1], GLM_df=GLM_df)
 
-    ax[2].axhline(y=0, color='gray', linestyle='--')
-    ax[2].set_ylabel('GLM weight')
-    ax[2].set_xlabel('Previous trials')
-    ax[2].legend(loc='best')
+    ax[1].axhline(y=0, color='gray', linestyle='--')
+    ax[1].set_ylabel('GLM weight')
+    ax[1].set_xlabel('Previous trials')
+    ax[1].legend(loc='best')
     for mp in mean_perf_iti:
-        ax[3].plot(iti_list, mp, color='lightgray')
+        ax[2].plot(iti_list, mp, color='lightgray')
     mp_arr = np.array(mean_perf_iti)
-    ax[3].plot(iti_list, [np.mean(mp_arr[:, 0]), np.mean(mp_arr[:, 1]),
+    ax[2].plot(iti_list, [np.mean(mp_arr[:, 0]), np.mean(mp_arr[:, 1]),
                           np.mean(mp_arr[:, 2])],
                linewidth=3.5, color='black', label='mean')
-    ax[3].legend()
-    ax[3].set_xlabel('ITI')
-    ax[3].set_ylabel('Performance')
-    f.savefig(main_folder + '/performance_bests'+str(take_best)+'.png')
+    ax[2].legend()
+    ax[2].set_xlabel('ITI')
+    ax[2].set_ylabel('Performance')
+    f.savefig(sv_folder + '/performance_bests'+str(take_best)+'.png')
     plt.show()
 
 
-def test_networks(main_folder, task_params, take_best, verbose, num_steps_tests = 50000,
-                  plot=True, **env_test):
-    # Set up the task
-    # call function to sample
-    ENV_KWARGS.update(env_test)
-    env = gym.make(TASK, **ENV_KWARGS)
-    env = pass_reward.PassReward(env)
-    env = pass_action.PassAction(env)
-    # set seed
-    env.seed(123)
-    env.reset()
-
-    # NET_KWARGS = {'hidden_size': 64,
-    #             'action_size': env.action_space.n,
-    #             'input_size': env.observation_space.shape[0]}
-
-    TRAINING_KWARGS['env_kwargs'] = ENV_KWARGS
-    TRAINING_KWARGS['net_kwargs'] = NET_KWARGS
+def test_networks(folder, env, take_best, sv_folder, verbose=False, num_steps_tests=50000):
 
     mean_perf_all = []
     nets_seeds_all = []
@@ -322,11 +310,6 @@ def test_networks(main_folder, task_params, take_best, verbose, num_steps_tests 
     iti_list_all = np.array([])
     mean_perf_iti_all = []
     GLM_coeffs_all = pd.DataFrame()
-    # TODO: move this to a function
-    folder = (f"{main_folder}w{task_params['w_factor']}_mITI{task_params['mean_ITI']}"
-              f"_xITI{task_params['max_ITI']}_f{task_params['fix_dur']}_"
-              f"d{task_params['dec_dur']}_nb{np.round(task_params['blk_dur']/1e3, 1)}_"
-              f"prb{task_params['probs'][0]}")
     files = glob.glob(folder+'/*')
     # get only files with n_pers in name
     files = [f for f in files if 'n_pers' in f]
@@ -349,20 +332,20 @@ def test_networks(main_folder, task_params, take_best, verbose, num_steps_tests 
         mean_perf_iti_all += mean_perf_iti
         GLM_coeffs_all = pd.concat([GLM_coeffs_all, GLM_coeffs], axis=0)
     iti_list_all = np.unique(iti_list_all)
-    if plot:
+    if verbose:
         plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_all,
                               GLM_coeffs=GLM_coeffs_all,
                               mean_perf=mean_perf_all,
                               iti_list=iti_list_all,
                               mean_perf_iti=mean_perf_iti_all,
                               seeds=nets_seeds_all,
-                              main_folder=folder, take_best=take_best)
+                              sv_folder=sv_folder, take_best=take_best)
     # save data
     GLM_coeffs_all.to_csv(folder + '/GLM_coeffs.csv')
     data = {'mean_perf_all': mean_perf_all, 'nets_seeds_all': nets_seeds_all,
             'net_nums_all': net_nums_all, 'iti': iti_list_all,
             'mean_perf_iti_all': mean_perf_iti_all, 'folders': files}
-    np.savez(folder + '/data_analysis.npz', **data)
+    np.savez(sv_folder + '/data_analysis.npz', **data)
     return data
 # TODO: create a function that tests the network in different environments
 
@@ -371,47 +354,52 @@ def test_networks(main_folder, task_params, take_best, verbose, num_steps_tests 
 if __name__ == '__main__':
     plt.close('all')
     take_best = True
-    num_steps_tests = 50000
+    num_steps_tests = 500
     verbose = True
     PERF_THRESHOLD = 0.7
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
-    # Set up the task
-
-    env_seed = 8  # 7
-    w_factor = 0.00001
-    mean_ITI = 200
-    max_ITI = 400
-    fix_dur = 100
-    dec_dur = 100
-    blk_dur = 50
-    probs = np.array([0.1, 0.9])
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
 
     # put the parameters in a dictionary
-    task_params = {'env_seed': env_seed, 'w_factor': w_factor,
-                   'mean_ITI': mean_ITI, 'max_ITI': max_ITI,
-                   'fix_dur': fix_dur, 'dec_dur': dec_dur, 'blk_dur': blk_dur,
-                   'probs': probs}
+    task_params = {'env_seed': 8, 'w_factor': 0.00001,
+                   'mean_ITI': 200, 'max_ITI': 400,
+                   'fix_dur': 100, 'dec_dur': 100, 'blk_dur': 50,
+                   'probs': np.array([0.1, 0.9])}
+    folder = (f"{main_folder}w{task_params['w_factor']}_mITI{task_params['mean_ITI']}"
+              f"_xITI{task_params['max_ITI']}_f{task_params['fix_dur']}_"
+              f"d{task_params['dec_dur']}_nb{np.round(task_params['blk_dur']/1e3, 1)}_"
+              f"prb{task_params['probs'][0]}")
 
     # create folder to save data based on parameters
-    ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
-                'blk_dur': 20, 'timing':
-                    {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
-                        # mean, min, max
-                        'fixation': fix_dur, 'decision': dec_dur}} # Decision period
-    # Set up the task
-    # call function to sample
-    env = gym.make(TASK, **ENV_KWARGS)
-    env = pass_reward.PassReward(env)
-    env = pass_action.PassAction(env)
-    # set seed
-    env.seed(123)
-    env.reset()
+    ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'probs': task_params['probs'],
+                  'blk_dur': task_params['blk_dur'], 'timing':
+                    {'ITI': ngym_f.random.TruncExp(task_params['mean_ITI'], 100, task_params['max_ITI']), # mean, min, max
+                     'fixation': task_params['fix_dur'], 'decision': task_params['dec_dur']}} # Decision period
+    # change specific parameters to test the network in different environments
+    mean_ITI_test = [200, 400, 600, 800]
+    max_ITI_test = [400, 600, 800, 1000]
+    for mITI, mxITI in zip(mean_ITI_test, max_ITI_test):
+        ENV_KWARGS['timing']['ITI'] = ngym_f.random.TruncExp(mITI, 100, mxITI)
+        # create folder name to save test data
+        save_folder = (f"{folder}/mITI{mITI}"
+                f"_xITI{mxITI}_f{ENV_KWARGS['timing']['fixation']}_"
+                f"d{ENV_KWARGS['timing']['decision']}_nb{np.round(ENV_KWARGS['blk_dur']/1e3, 1)}_"
+                f"prb{ENV_KWARGS['probs'][0]}")
+        # create save folder
+        os.makedirs(save_folder, exist_ok=True)
+        # Set up the task
+        # call function to sample
+        env = gym.make(TASK, **ENV_KWARGS)
+        env = pass_reward.PassReward(env)
+        env = pass_action.PassAction(env)
+        # set seed
+        env.seed(123)
+        env.reset()
 
-    NET_KWARGS = {'hidden_size': 64,
-                  'action_size': env.action_space.n,
-                  'input_size': env.observation_space.shape[0]}
+        NET_KWARGS = {'hidden_size': 64,
+                    'action_size': env.action_space.n,
+                    'input_size': env.observation_space.shape[0]}
 
-    test_networks(main_folder=main_folder, task_params=task_params, take_best=take_best,verbose=verbose,
-                  num_steps_tests=50000, plot=True)
+        test_networks(folder=folder, env=env, take_best=take_best,verbose=verbose,
+                      num_steps_tests=num_steps_tests, sv_folder=save_folder)
