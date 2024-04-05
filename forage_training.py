@@ -653,16 +653,72 @@ def plot_performace_by_iti(data, save_folder):
     plt.savefig(save_folder + '/perf_iti.png')
 
 
+def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed):
+    """
+    Process a dataframe located in the specified folder.
+    If the dataframe exists, modify it. Otherwise, create it with desired
+    columns.
+
+    Parameters:
+        folder_path (str): Path to the folder containing the dataframe.
+        filename (str): Name of the dataframe file.
+        columns (list): List of column names for the dataframe.
+        df (pandas DataFrame): DataFrame resulting from dict2df function.
+            Contains actions, gt, iti, prob_r and reward
+
+    Returns:
+        DataFrame: The processed or newly created dataframe. Contains the
+        columns:'params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
+        'prob_r', 'reward'
+    """
+    columns = ['params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
+               'prob_r', 'reward']
+    # Check if the folder exists, if not, create it
+    # if not os.path.exists(main_folder):
+    #     os.makedirs(main_folder)
+
+    file_path = os.path.join(main_folder, filename)
+
+    # Check if the file exists
+    if os.path.exists(file_path):
+        # File exists, load the dataframe
+        training_df = pd.read_csv(file_path)
+        # Perform modifications here if needed
+        # For example, add new columns, modify existing ones, etc.
+    else:
+        # File doesn't exist, create a new dataframe with desired columns
+        training_df = pd.DataFrame(columns=columns)
+
+    # remove main_folder path from save_folder to obtain just the params:
+    params = os.path.relpath(save_folder, main_folder)
+
+    # You can perform further operations here if needed
+    values_to_add = pd.DataFrame({'params': [params]*len(df),
+                                  'env_seed': [env_seed]*len(df),
+                                  'net_seed': [seed]*len(df)})
+    result_df = pd.concat([df, values_to_add], axis=1)
+    # reset index after concatenation
+    result_df.reset_index(drop=True, inplace=True)
+
+    training_df = pd.concat([training_df, result_df], axis=0)
+    # reset index after concatenation
+    training_df.reset_index(drop=True, inplace=True)
+
+    # Save the dataframe to file
+    training_df.to_csv(file_path, index=False)
+
+    return training_df
+
+
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
     env_seed = 8
-    num_periods = 4000
+    num_periods = 40
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/
-    # nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     w_factor = 0.00001
     mean_ITI = 200
@@ -703,7 +759,7 @@ if __name__ == '__main__':
                    f"prb{probs[0]}")
 
     # create folder to save data based on env seed
-    os.makedirs(save_folder + 'n_pers_'+np.round(num_periods/1e3, 1)+'k_'+'s_'+str(env_seed),
+    os.makedirs(save_folder + 'n_pers_'+str(np.round(num_periods/1e3, 1))+'k_'+'s_'+str(env_seed),
                 exist_ok=True)
 
     # Save config as npz
@@ -716,7 +772,7 @@ if __name__ == '__main__':
         TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     num_steps_plot = 100
     debug = False
-    num_networks = 10
+    num_networks = 1
     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
     # train several networks with different seeds
     for i_net in range(num_networks):
@@ -759,6 +815,14 @@ if __name__ == '__main__':
                   save_folder=save_folder_net)
         plot_performace_by_iti(data, save_folder=save_folder_net)
         plt.close('all')
+
+        # save the data fom the net in the dataframe
+        filename = 'training_df.csv'
+        training_df = process_dataframe(main_folder=main_folder,
+                                        filename=filename, df=df,
+                                        save_folder=save_folder,
+                                        env_seed=env_seed, seed=seed)
+        
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
