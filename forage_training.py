@@ -234,24 +234,6 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     return data
 
 
-def build_dataset(data):
-
-    # OBSERVATION
-    ob_array = np.array(data['ob'])
-    # reshape
-    inputs = ob_array.reshape(TRAINING_KWARGS['batch_size'],
-                              TRAINING_KWARGS['seq_len'], 3)
-
-    # labels
-    labels = np.array(data['gt'])
-    # reshape
-    labels = labels.reshape(TRAINING_KWARGS['batch_size'],
-                            TRAINING_KWARGS['seq_len'])
-
-    dataset = {'inputs': inputs, 'labels': labels}
-    return dataset
-
-
 def plot_dataset(dataset):
     f, ax = plt.subplots(nrows=4, sharex=True)
     for i in range(2):
@@ -360,10 +342,8 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
     error_fixation_list = []
     error_2_list = []
     error_3_list = []
-    train_1 = False
     log_per = 200
-    if not train_1:
-        num_steps_exp = TRAINING_KWARGS['seq_len']
+    num_steps_exp = TRAINING_KWARGS['seq_len']
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
                                         num_steps_exp=num_steps_exp)
@@ -382,22 +362,16 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
         df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
         mean_rew_list.append(data['mean_rew'])
-        if train_1:
-            dataset = build_dataset(data)
-            loss_1st_ep = train(num_epochs=num_epochs, dataset=dataset,
-                                net=net, optimizer=optimizer,
-                                criterion=criterion, env=env)
-        else:
-            # we need to zero the parameter gradients to re-initialize and
-            # avoid they accumulate across epochs
-            optimizer.zero_grad()
-            # compute loss with respect to the labels
-            loss = criterion(outputs, labels)
-            # compute gradients
-            loss.backward()
-            # update weights
-            optimizer.step()
-            loss_1st_ep = loss.item()
+        # we need to zero the parameter gradients to re-initialize and
+        # avoid they accumulate across epochs
+        optimizer.zero_grad()
+        # compute loss with respect to the labels
+        loss = criterion(outputs, labels)
+        # compute gradients
+        loss.backward()
+        # update weights
+        optimizer.step()
+        loss_1st_ep = loss.item()
         loss_1st_ep_list.append(loss_1st_ep)
         # print loss
         if i_per % log_per == log_per-1:
@@ -421,76 +395,6 @@ def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
             'error_2_list': error_2_list,
             'error_3_list': error_3_list}
     return dict, net, df
-
-
-def train(num_epochs, net, optimizer, criterion, env, dataset):
-    """
-    Train the neural network.
-
-    Parameters
-    ----------
-    num_epochs : int
-        The number of epochs for training.
-    net:
-        The neural network model to be trained.
-    optimizer:
-        The optimizer used for updating the model paramenters.
-    criterion:
-        The loss function used for computing the loss.
-    env:
-
-
-    Returns
-    -------
-    None.
-
-    """
-    running_loss = 0.0
-    for ep in range(num_epochs):
-        # get inputs and labels and pass them to the GPU
-        inputs = dataset['inputs']
-        labels = dataset['labels']
-        # inputs = np.expand_dims(inputs, axis=2)
-        inputs = torch.from_numpy(inputs).type(torch.float).to(DEVICE)
-        labels = torch.from_numpy(labels.flatten()).type(torch.long).to(DEVICE)
-        # print shapes of inputs and labels
-        if ep == -1:
-            print('inputs shape: ', inputs.shape)
-            print('labels shape: ', labels.shape)
-            print('Max labels: ', labels.max())
-        # we need zero the parameter gradients to re-initialize and avoid they
-        # accumulate across epochs
-        optimizer.zero_grad()
-
-        # forward pass: get the output of the network for a
-        # given input
-        outputs, _ = net(inputs)
-
-        # reshape outputs so they have the same shape as labels
-        outputs = outputs.view(-1, env.action_space.n)
-
-        # compute loss with respect to the labels
-        loss = criterion(outputs, labels)
-
-        # compute gradients
-        loss.backward()
-
-        # update weights
-        optimizer.step()
-
-        # print average loss over last 200 training iterations and save the
-        # current network
-        running_loss += loss.item()
-        if ep == 0:
-            loss_1st_ep = running_loss / 200
-        # if ep % 2 == 0:
-        #     print('{:d} loss: {:0.5f}'.format(ep + 1, running_loss / 200))
-        #     running_loss = 0.0
-
-            # save current state of network's parameters
-            # torch.save(net.state_dict(), get_modelpath(TASK) / 'net.pth')
-
-    return loss_1st_ep
 
 
 def preprocess_activity(activity):
@@ -713,12 +617,12 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed):
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')
-    env_seed = 8
+    env_seed = 123
     num_periods = 40
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     w_factor = 0.00001
     mean_ITI = 200
