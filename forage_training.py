@@ -557,7 +557,8 @@ def plot_performace_by_iti(data, save_folder):
     plt.savefig(save_folder + '/perf_iti.png')
 
 
-def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed):
+def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
+                      num_steps_exp, mean_ITI, fix_dur, blk_dur, seq_len):
     """
     Process a dataframe located in the specified folder.
     If the dataframe exists, modify it. Otherwise, create it with desired
@@ -573,10 +574,12 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed):
     Returns:
         DataFrame: The processed or newly created dataframe. Contains the
         columns:'params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
-        'prob_r', 'reward'
+        'prob_r', 'reward', 'num_steps-exp', 'mean_ITI', 'fix_dur', 'blk_dur',
+        'seq_len'
     """
     columns = ['params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
-               'prob_r', 'reward']
+               'prob_r', 'reward', 'num_steps_exp', 'mean_ITI', 'fix_dur',
+               'blk_dur', 'seq_len']
     # Check if the folder exists, if not, create it
     # if not os.path.exists(main_folder):
     #     os.makedirs(main_folder)
@@ -599,7 +602,12 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed):
     # You can perform further operations here if needed
     values_to_add = pd.DataFrame({'params': [params]*len(df),
                                   'env_seed': [env_seed]*len(df),
-                                  'net_seed': [seed]*len(df)})
+                                  'net_seed': [seed]*len(df),
+                                  'num_steps_exp': [num_steps_exp]*len(df),
+                                  'mean_ITI': [mean_ITI]*len(df),
+                                  'fix_dur': [fix_dur]*len(df),
+                                  'blk_dur': [blk_dur]*len(df),
+                                  'seq_len': [seq_len]*len(df)})
     result_df = pd.concat([df, values_to_add], axis=1)
     # reset index after concatenation
     result_df.reset_index(drop=True, inplace=True)
@@ -622,7 +630,7 @@ if __name__ == '__main__':
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
+   # main_folder = '/home/molano/foragingRNNs_data/nets/'
     # Set up the task
     w_factor = 0.00001
     mean_ITI = 200
@@ -721,12 +729,15 @@ if __name__ == '__main__':
         plt.close('all')
 
         # save the data fom the net in the dataframe
-        filename = 'training_df.csv'
+        filename = 'training_nets.csv'
         training_df = process_dataframe(main_folder=main_folder,
                                         filename=filename, df=df,
                                         save_folder=save_folder,
-                                        env_seed=env_seed, seed=seed)
-        
+                                        env_seed=env_seed, seed=seed,
+                                        num_steps_exp=num_steps_exp,
+                                        mean_ITI=mean_ITI, fix_dur=fix_dur,
+                                        blk_dur=blk_dur,
+                                        seq_len=TRAINING_KWARGS['seq_len'])
 
     # load configuration file - we might have run the training on the cloud
     # and might now open the results locally
