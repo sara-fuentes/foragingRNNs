@@ -299,7 +299,7 @@ def dict2df(data):
 
 
 def train_network(num_periods, criterion, env,
-                  net_kwargs, env_kwargs, debug=False, seed=0,
+                  net_kwargs, env_kwargs, seq_len, debug=False, seed=0,
                   save_folder=None):
     """
     """
@@ -320,10 +320,9 @@ def train_network(num_periods, criterion, env,
     error_3_list = []
     log_per = 200
     # TODO: get seq_len as an input parameter
-    num_steps_exp = TRAINING_KWARGS['seq_len']
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
-                                        num_steps_exp=num_steps_exp)
+                                        num_steps_exp=seq_len)
         # transform list of torch to torch tensor
         outputs = torch.stack(data['act_pr_mat'], dim=1)
         # squeeze the outputs tensor to remove the dimension of size 1
@@ -334,7 +333,7 @@ def train_network(num_periods, criterion, env,
 
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
-                      num_steps=num_steps_exp)
+                      num_steps=seq_len)
         # transform data to a pandas dataframe.
         df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
@@ -535,7 +534,7 @@ def plot_performace_by_iti(data, save_folder):
 
 
 def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
-                      mean_ITI, fix_dur, blk_dur):
+                      mean_ITI, fix_dur, blk_dur, seq_len):
     """
     Process a dataframe located in the specified folder.
     If the dataframe exists, modify it. Otherwise, create it with desired
@@ -583,7 +582,7 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
                                   'mean_ITI': [mean_ITI]*len(df),
                                   'fix_dur': [fix_dur]*len(df),
                                   'blk_dur': [blk_dur]*len(df),
-                                  'seq_len': [TRAINING_KWARGS['seq_len']]*len(df)})
+                                  'seq_len': [seq_len]*len(df)})
     result_df = pd.concat([df, values_to_add], axis=1)
     # reset index after concatenation
     result_df.reset_index(drop=True, inplace=True)
@@ -599,9 +598,11 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
 
 
 def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
-                            num_networks, num_epochs, env, env_seed, main_folder,
-                            save_folder, env_kwargs, net_kwargs, criterion, debug=False,
-                            num_steps_test=1000, num_steps_plot=100):
+                            num_networks, env, env_seed, main_folder,
+                            save_folder, env_kwargs, net_kwargs, criterion,
+                            num_periods, seq_len, debug=False, num_steps_test=1000,
+                            num_steps_plot=100):
+    mean_perf_list = []
     for _ in range(num_networks):
         seed = np.random.randint(0, 10000)
         # create folder to save data based on net seed
@@ -609,11 +610,11 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
 
-        data_behav, net, df = train_network(num_epochs=num_epochs,
-                                            num_periods=TRAINING_KWARGS['num_periods'],
+        data_behav, net, df = train_network(num_periods=num_periods,
                                             criterion=criterion,
                                             env=env, net_kwargs=net_kwargs,
                                             env_kwargs=env_kwargs,
+                                            seq_len=seq_len,
                                             debug=debug, seed=seed,
                                             save_folder=save_folder_net)
         # save data as npz
@@ -627,15 +628,16 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         error_fixation_list = data_behav['error_fixation_list']
         error_2_list = data_behav['error_2_list']
         error_3_list = data_behav['error_3_list']
-        plot_perf_rew_loss(TRAINING_KWARGS['num_periods'], mean_perf_list,
+        plot_perf_rew_loss(num_periods, mean_perf_list,
                            mean_rew_list,
                            loss_1st_ep_list, save_folder_net)
 
-        plot_error(TRAINING_KWARGS['num_periods'], error_no_action_list,
+        plot_error(num_periods, error_no_action_list,
                    error_fixation_list,  error_2_list, error_3_list,
                    save_folder_net)
         data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
                                         net=net)
+        mean_perf_list.append(data['mean_perf'])
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                   save_folder=save_folder_net)
         plot_performace_by_iti(data, save_folder=save_folder_net)
@@ -648,8 +650,8 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                                         save_folder=save_folder,
                                         env_seed=env_seed, seed=seed,
                                         mean_ITI=mean_ITI, fix_dur=fix_dur,
-                                        blk_dur=blk_dur)
-    return training_df
+                                        blk_dur=blk_dur, seq_len=seq_len)
+    return mean_perf_list, training_df
 
 
 # --- MAIN
