@@ -322,7 +322,7 @@ def dict2df(data):
     return df
 
 
-def train_network(num_epochs, num_periods, num_steps_exp, criterion, env,
+def train_network(num_periods, criterion, env,
                   net_kwargs, env_kwargs, debug=False, seed=0,
                   save_folder=None):
     """
@@ -558,7 +558,7 @@ def plot_performace_by_iti(data, save_folder):
 
 
 def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
-                      num_steps_exp, mean_ITI, fix_dur, blk_dur, seq_len):
+                      mean_ITI, fix_dur, blk_dur):
     """
     Process a dataframe located in the specified folder.
     If the dataframe exists, modify it. Otherwise, create it with desired
@@ -574,11 +574,11 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     Returns:
         DataFrame: The processed or newly created dataframe. Contains the
         columns:'params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
-        'prob_r', 'reward', 'num_steps-exp', 'mean_ITI', 'fix_dur', 'blk_dur',
+        'prob_r', 'reward', 'mean_ITI', 'fix_dur', 'blk_dur',
         'seq_len'
     """
     columns = ['params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
-               'prob_r', 'reward', 'num_steps_exp', 'mean_ITI', 'fix_dur',
+               'prob_r', 'reward', 'mean_ITI', 'fix_dur',
                'blk_dur', 'seq_len']
     # Check if the folder exists, if not, create it
     # if not os.path.exists(main_folder):
@@ -603,11 +603,10 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     values_to_add = pd.DataFrame({'params': [params]*len(df),
                                   'env_seed': [env_seed]*len(df),
                                   'net_seed': [seed]*len(df),
-                                  'num_steps_exp': [num_steps_exp]*len(df),
                                   'mean_ITI': [mean_ITI]*len(df),
                                   'fix_dur': [fix_dur]*len(df),
                                   'blk_dur': [blk_dur]*len(df),
-                                  'seq_len': [seq_len]*len(df)})
+                                  'seq_len': [TRAINING_KWARGS['seq_len']]*len(df)})
     result_df = pd.concat([df, values_to_add], axis=1)
     # reset index after concatenation
     result_df.reset_index(drop=True, inplace=True)
@@ -680,9 +679,8 @@ if __name__ == '__main__':
     # with open(save_folder+'/config.json', 'w') as f:
     #     json.dump(TRAINING_KWARGS, f)
     num_epochs = TRAINING_KWARGS['n_epochs']
-    num_steps_exp =\
-        TRAINING_KWARGS['seq_len']*TRAINING_KWARGS['batch_size']
     num_steps_plot = 100
+    num_steps_test = 1000
     debug = False
     num_networks = 1
     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
@@ -696,7 +694,6 @@ if __name__ == '__main__':
 
         data_behav, net, df = train_network(num_epochs=num_epochs,
                                             num_periods=TRAINING_KWARGS['num_periods'],
-                                            num_steps_exp=num_steps_exp,
                                             criterion=criterion,
                                             env=env, net_kwargs=net_kwargs,
                                             env_kwargs=env_kwargs,
@@ -721,7 +718,7 @@ if __name__ == '__main__':
         plot_error(TRAINING_KWARGS['num_periods'], error_no_action_list,
                    error_fixation_list,  error_2_list, error_3_list,
                    save_folder_net)
-        data = run_agent_in_environment(num_steps_exp=num_steps_exp, env=env,
+        data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
                                         net=net)
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                   save_folder=save_folder_net)
@@ -734,12 +731,5 @@ if __name__ == '__main__':
                                         filename=filename, df=df,
                                         save_folder=save_folder,
                                         env_seed=env_seed, seed=seed,
-                                        num_steps_exp=num_steps_exp,
                                         mean_ITI=mean_ITI, fix_dur=fix_dur,
-                                        blk_dur=blk_dur,
-                                        seq_len=TRAINING_KWARGS['seq_len'])
-
-    # load configuration file - we might have run the training on the cloud
-    # and might now open the results locally
-    # with open(get_modelpath(TASK) / 'config.json') as f:
-    #     config = json.load(f)
+                                        blk_dur=blk_dur)
