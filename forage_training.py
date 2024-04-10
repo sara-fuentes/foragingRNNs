@@ -621,74 +621,14 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     return training_df
 
 
-# --- MAIN
-if __name__ == '__main__':
-    plt.close('all')
-    env_seed = 123
-    num_periods = 40
-    TRAINING_KWARGS['num_periods'] = num_periods
-    # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-   # main_folder = '/home/molano/foragingRNNs_data/nets/'
-    # Set up the task
-    w_factor = 0.00001
-    mean_ITI = 200
-    max_ITI = 400
-    fix_dur = 100
-    dec_dur = 100
-    blk_dur = 50
-    probs = np.array([0.1, 0.9])
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
-                  'blk_dur': blk_dur, 'timing':
-                      {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
-                       # mean, min, max
-                       'fixation': fix_dur, 'decision': dec_dur},
-                      # Decision period}
-                      'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
-    TRAINING_KWARGS['classes_weights'] =\
-        torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
-                      w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
-    # call function to sample
-    env = gym.make(TASK, **env_kwargs)
-    env = pass_reward.PassReward(env)
-    env = pass_action.PassAction(env)
-    # set seed
-    env.seed(env_seed)
-    env.reset()
-    net_kwargs = {'hidden_size': 128,
-                  'action_size': env.action_space.n,
-                  'input_size': env.observation_space.shape[0]}
-    TRAINING_KWARGS['env_kwargs'] = env_kwargs
-    TRAINING_KWARGS['net_kwargs'] = net_kwargs
-    # plot task
-    data = run_agent_in_environment(num_steps_exp=100, env=env)
-    plot_task(env_kwargs=env_kwargs, data=data, num_steps=100)
-
-    # create folder to save data based on parameters
-    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                   f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
-                   f"prb{probs[0]}")
-
-    # create folder to save data based on env seed
-    os.makedirs(save_folder + 'n_pers_'+str(np.round(num_periods/1e3, 1))+'k_'+'s_'+str(env_seed),
-                exist_ok=True)
-
-    # Save config as npz
-    np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
-    # Save config
-    # with open(save_folder+'/config.json', 'w') as f:
-    #     json.dump(TRAINING_KWARGS, f)
-    num_epochs = TRAINING_KWARGS['n_epochs']
-    num_steps_plot = 100
-    num_steps_test = 1000
-    debug = False
-    num_networks = 1
-    criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
-    # train several networks with different seeds
-    for i_net in range(num_networks):
+def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
+                            num_networks, num_epochs, env, env_seed, main_folder,
+                            save_folder, env_kwargs, net_kwargs, criterion, debug=False,
+                            num_steps_test=1000, num_steps_plot=100):
+    for _ in range(num_networks):
         seed = np.random.randint(0, 10000)
         # create folder to save data based on net seed
-        save_folder_net = save_folder + '/' + str(seed)
+        save_folder_net = save_folder + '/' + str(env_seed)
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
 
@@ -700,7 +640,6 @@ if __name__ == '__main__':
                                             debug=debug, seed=seed,
                                             save_folder=save_folder_net)
         # save data as npz
-        # TODO: use npy?
         np.savez(save_folder_net + '/data.npz', **data_behav)
 
         # get data from data_behav
@@ -733,3 +672,70 @@ if __name__ == '__main__':
                                         env_seed=env_seed, seed=seed,
                                         mean_ITI=mean_ITI, fix_dur=fix_dur,
                                         blk_dur=blk_dur)
+    return training_df
+
+
+# --- MAIN
+# if __name__ == '__main__':
+#     plt.close('all')
+#     env_seed = 123
+#     num_periods = 40
+#     TRAINING_KWARGS['num_periods'] = num_periods
+#     # create folder to save data based on env seed
+#     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+#    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+#     # Set up the task
+#     w_factor = 0.00001
+#     mean_ITI = 200
+#     max_ITI = 400
+#     fix_dur = 100
+#     dec_dur = 100
+#     blk_dur = 50
+#     probs = np.array([0.1, 0.9])
+#     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
+#                   'blk_dur': blk_dur, 'timing':
+#                       {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+#                        # mean, min, max
+#                        'fixation': fix_dur, 'decision': dec_dur},
+#                       # Decision period}
+#                       'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+#     TRAINING_KWARGS['classes_weights'] =\
+#         torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
+#                       w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
+#     # call function to sample
+#     env = gym.make(TASK, **env_kwargs)
+#     env = pass_reward.PassReward(env)
+#     env = pass_action.PassAction(env)
+#     # set seed
+#     env.seed(env_seed)
+#     env.reset()
+#     net_kwargs = {'hidden_size': 128,
+#                   'action_size': env.action_space.n,
+#                   'input_size': env.observation_space.shape[0]}
+#     TRAINING_KWARGS['env_kwargs'] = env_kwargs
+#     TRAINING_KWARGS['net_kwargs'] = net_kwargs
+#     # plot task
+#     data = run_agent_in_environment(num_steps_exp=100, env=env)
+#     plot_task(env_kwargs=env_kwargs, data=data, num_steps=100)
+
+#     # create folder to save data based on parameters
+#     save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+#                    f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
+#                    f"prb{probs[0]}")
+
+#     # create folder to save data based on env seed
+#     os.makedirs(save_folder + 'n_pers_'+str(np.round(num_periods/1e3, 1))+'k_'+'s_'+str(env_seed),
+#                 exist_ok=True)
+
+#     # Save config as npz
+#     np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
+#     # Save config
+#     # with open(save_folder+'/config.json', 'w') as f:
+#     #     json.dump(TRAINING_KWARGS, f)
+#     num_epochs = TRAINING_KWARGS['n_epochs']
+#     num_steps_plot = 100
+#     num_steps_test = 1000
+#     debug = False
+#     num_networks = 1
+#     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
+#     # train several networks with different seeds
