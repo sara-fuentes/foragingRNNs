@@ -31,30 +31,6 @@ TRAINING_KWARGS = {'dt': 100,
                    'TASK': TASK}
 
 
-def get_dataset(TASK, env_kwargs):
-    """
-    Create neurogym dataset and environment.
-
-    args:
-        TASK (str): name of the task on the neurogym library
-        env_kwargs (dict): task parameters
-
-    returns:
-        dataset (neurogym.Dataset): dataset object from which we can sample
-        trials and labels
-        env (gym.Env): task environment
-    """
-
-    # Make supervised dataset using neurogym's Dataset class
-    dataset = ngym_f.Dataset(TASK,
-                             env_kwargs=env_kwargs,
-                             batch_size=TRAINING_KWARGS['batch_size'],
-                             seq_len=TRAINING_KWARGS['seq_len'])
-    env = dataset.env
-
-    return dataset, env
-
-
 class Net(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, seed=0):
         super(Net, self).__init__()
@@ -343,6 +319,7 @@ def train_network(num_periods, criterion, env,
     error_2_list = []
     error_3_list = []
     log_per = 200
+    # TODO: get seq_len as an input parameter
     num_steps_exp = TRAINING_KWARGS['seq_len']
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
