@@ -17,7 +17,7 @@ import sys
 import forage_training as ft
 import statsmodels.formula.api as smf
 import pandas as pd
-# import seaborn as sns
+import seaborn as sns
 import glob
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -301,7 +301,8 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     plt.show()
 
 
-def test_networks(folder, env, take_best, sv_folder, verbose=False, num_steps_tests=50000):
+def test_networks(folder, env, take_best, sv_folder, verbose=False,
+                  num_steps_tests=50000):
 
     mean_perf_all = []
     nets_seeds_all = []
@@ -348,6 +349,21 @@ def test_networks(folder, env, take_best, sv_folder, verbose=False, num_steps_te
     np.savez(sv_folder + '/data_analysis.npz', **data)
     return data
 # TODO: create a function that tests the network in different environments
+
+def plot_mean_perf_by_seq_len(mean_perf_lists, seq_len_list):
+    # boxplot of mean performance by sequence length
+    f, ax = plt.subplots(1, 1, figsize=(10, 6))
+    sns.boxplot(data=mean_perf_lists, ax=ax)
+    
+    # Add dots for individual data points
+    sns.stripplot(data=mean_perf_lists, color='k', size=5, ax=ax)
+    
+    ax.set_xticklabels(seq_len_list)
+    ax.set_xlabel('Sequence length')
+    ax.set_ylabel('Mean performance')
+    ax.set_title('Boxplot of Mean Performance by Sequence Length')
+    
+    plt.show()
 
 
 # --- MAIN
