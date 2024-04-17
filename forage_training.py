@@ -602,7 +602,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                             save_folder, env_kwargs, net_kwargs, criterion,
                             num_periods, seq_len, debug=False, num_steps_test=1000,
                             num_steps_plot=100):
-    mean_perf_list = []
+    mperf_list = []
     for _ in range(num_networks):
         seed = np.random.randint(0, 10000)
         # create folder to save data based on net seed
@@ -637,7 +637,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                    save_folder_net)
         data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
                                         net=net)
-        mean_perf_list.append(data['mean_perf'])
+        mperf_list.append(data['mean_perf'])
         plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                   save_folder=save_folder_net)
         plot_performace_by_iti(data, save_folder=save_folder_net)
@@ -651,7 +651,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                                         env_seed=env_seed, seed=seed,
                                         mean_ITI=mean_ITI, fix_dur=fix_dur,
                                         blk_dur=blk_dur, seq_len=seq_len)
-    return mean_perf_list, training_df
+    return mperf_list, training_df
 
 
 # --- MAIN

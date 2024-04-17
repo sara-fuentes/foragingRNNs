@@ -350,13 +350,13 @@ def test_networks(folder, env, take_best, sv_folder, verbose=False,
     return data
 # TODO: create a function that tests the network in different environments
 
-def plot_mean_perf_by_seq_len(mean_perf_lists, seq_len_list):
+def plot_mean_perf_by_seq_len(mperf_lists, seq_len_list):
     # boxplot of mean performance by sequence length
     f, ax = plt.subplots(1, 1, figsize=(10, 6))
-    sns.boxplot(data=mean_perf_lists, ax=ax)
+    sns.boxplot(data=mperf_lists, ax=ax)
     
     # Add dots for individual data points
-    sns.stripplot(data=mean_perf_lists, color='k', size=5, ax=ax)
+    sns.stripplot(data=mperf_lists, color='k', size=5, ax=ax)
     
     ax.set_xticklabels(seq_len_list)
     ax.set_xlabel('Sequence length')
