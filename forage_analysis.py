@@ -366,6 +366,53 @@ def plot_mean_perf_by_seq_len(mperf_lists, seq_len_list):
     plt.show()
 
 
+def get_mean_perf_by_seq_len(main_folder, filename, env_seed,
+                                seq_len_mat, w_factor, mean_ITI, max_ITI,
+                                fix_dur, dec_dur, blk_dur, probs):
+    
+    df_path = os.path.join(main_folder, filename)
+    df = pd.read_csv(df_path)
+
+    # Create param string to select nets
+    param_str = (f"w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
+                f"prb{probs[0]}")
+
+    # Filter DataFrame by env_seed and select_folder
+    filtered_df = df[(df['env_seed'] == env_seed) & (df['params'] == param_str)]
+
+    # Group filtered DataFrame by net_seed
+    grouped_df = filtered_df.groupby('net_seed')
+
+    # List to store mean performances for each seq_len across all 
+    # nets
+    mperf_lists = []
+
+    # Iterate over each seq_len in seq_len_mat
+    for seq_len in seq_len_mat:
+        # Filter DataFrame for the current seq_len
+        # seq_len_df = filtered_df[filtered_df['seq_len'] == seq_len]
+
+        # Create a list to store performances for the current
+        # seq_len
+        performances = []
+
+        # Iterate over each group (net_seed)
+        for net_seed, group_df in grouped_df:
+            # Filter group DataFrame for the current seq_len
+            net_seq_len_df = group_df[group_df['seq_len'] == seq_len]
+
+            # Compute performance for the current seq_len and
+            # append to performances
+            performance = np.mean((net_seq_len_df['actions'] == net_seq_len_df['gt']).astype(int))
+            performances.append(performance)
+
+        # Append performances for the current seq_len to 
+        # mean_performances_all_nets
+        mperf_lists.append(performances)
+
+    return mperf_lists
+
 # --- MAIN
 if __name__ == '__main__':
     plt.close('all')

@@ -599,7 +599,7 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
 
 def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                             num_networks, env, env_seed, main_folder,
-                            save_folder, env_kwargs, net_kwargs, criterion,
+                            save_folder, filename, env_kwargs, net_kwargs, criterion,
                             num_periods, seq_len, debug=False, num_steps_test=1000,
                             num_steps_plot=100):
     mperf_list = []
@@ -644,7 +644,6 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         plt.close('all')
 
         # save the data fom the net in the dataframe
-        filename = 'training_nets.csv'
         training_df = process_dataframe(main_folder=main_folder,
                                         filename=filename, df=df,
                                         save_folder=save_folder,
@@ -652,7 +651,6 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                                         mean_ITI=mean_ITI, fix_dur=fix_dur,
                                         blk_dur=blk_dur, seq_len=seq_len)
     return mperf_list, training_df
-
 
 # --- MAIN
 # if __name__ == '__main__':
