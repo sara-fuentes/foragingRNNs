@@ -366,7 +366,7 @@ def plot_mean_perf_by_seq_len(mperf_lists, seq_len_list):
     plt.show()
 
 
-def get_mean_perf_by_seq_len(main_folder, filename, env_seed,
+def get_mean_perf_by_seq_len(main_folder, filename,
                                 seq_len_mat, w_factor, mean_ITI, max_ITI,
                                 fix_dur, dec_dur, blk_dur, probs):
     
@@ -379,39 +379,27 @@ def get_mean_perf_by_seq_len(main_folder, filename, env_seed,
                 f"prb{probs[0]}")
 
     # Filter DataFrame by env_seed and select_folder
-    filtered_df = df[(df['env_seed'] == env_seed) & (df['params'] == param_str)]
+    filtered_df = df[(df['params'] == param_str)]
 
-    # Group filtered DataFrame by net_seed
-    grouped_df = filtered_df.groupby('net_seed')
+    # add column called performance showing wether action was equal to gt
+    filtered_df['performance'] = (filtered_df['actions'] == filtered_df['gt']).astype(int)
 
-    # List to store mean performances for each seq_len across all 
-    # nets
+    # compute average grouping by seq_len and net_seed using groupby
+    grouped_df = filtered_df.groupby(['seq_len', 'net_seed'])
+
+    mperfs = grouped_df['performance'].mean().reset_index()
+
+    # List to store mean performances for each seq_len across all nets
     mperf_lists = []
 
-    # Iterate over each seq_len in seq_len_mat
     for seq_len in seq_len_mat:
-        # Filter DataFrame for the current seq_len
-        # seq_len_df = filtered_df[filtered_df['seq_len'] == seq_len]
-
-        # Create a list to store performances for the current
-        # seq_len
-        performances = []
-
-        # Iterate over each group (net_seed)
-        for net_seed, group_df in grouped_df:
-            # Filter group DataFrame for the current seq_len
-            net_seq_len_df = group_df[group_df['seq_len'] == seq_len]
-
-            # Compute performance for the current seq_len and
-            # append to performances
-            performance = np.mean((net_seq_len_df['actions'] == net_seq_len_df['gt']).astype(int))
-            performances.append(performance)
-
-        # Append performances for the current seq_len to 
-        # mean_performances_all_nets
-        mperf_lists.append(performances)
-
+        seq_len_df = grouped_df[grouped_df['seq_len'] == seq_len]
+        mperf_list = seq_len_df['performance'].tolist()
+        mperf_lists.append(mperf_list)
+    
     return mperf_lists
+
+
 
 # --- MAIN
 if __name__ == '__main__':
