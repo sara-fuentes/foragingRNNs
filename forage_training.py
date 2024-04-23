@@ -319,6 +319,7 @@ def train_network(num_periods, criterion, env,
     error_2_list = []
     error_3_list = []
     log_per = 200
+    minimum_loss = 1e6
     # TODO: get seq_len as an input parameter
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
@@ -347,17 +348,19 @@ def train_network(num_periods, criterion, env,
         loss.backward()
         # update weights
         optimizer.step()
-        loss_1st_ep = loss.item()
-        loss_1st_ep_list.append(loss_1st_ep)
+        loss_step = loss.item()
+        loss_1st_ep_list.append(loss_step)
         # print loss
-        if i_per % log_per == log_per-1:
+        if i_per % log_per == log_per-1 and loss_step < minimum_loss:
             print('------------')
             print('Period: ', i_per, 'of', num_periods)
             print('mean performance: ', data['mean_perf'])
             print('mean reward: ', data['mean_rew'])
-            print('Loss: ', loss_1st_ep)
+            print('Loss: ', loss_step)
             # save net
             torch.save(net, save_folder + '/net' + str(i_per) + '.pth')
+            minimum_loss = loss_step
+            best_net = net
 
         error_dict = compute_error(data)
         error_no_action_list.append(error_dict['error_no_action'])
@@ -370,7 +373,7 @@ def train_network(num_periods, criterion, env,
             'error_fixation_list': error_fixation_list,
             'error_2_list': error_2_list,
             'error_3_list': error_3_list}
-    return dict, net, df
+    return dict, best_net, df
 
 
 def preprocess_activity(activity):
