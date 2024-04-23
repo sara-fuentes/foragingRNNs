@@ -222,6 +222,7 @@ def general_analysis(load_folder, env, take_best, num_steps_exp=50000,
                   output_size=env.action_space.n)
         net = net.to(DEVICE)
         # load network
+        # TODO: check if load_net works without net as a parameter
         net, network_number = load_net(save_folder=save_folder_net,
                                        performance=mean_performance_smooth,
                                        take_best=take_best)
@@ -402,54 +403,117 @@ def get_mean_perf_by_seq_len(main_folder, filename,
 
 # --- MAIN
 if __name__ == '__main__':
-    plt.close('all')
-    take_best = True
-    num_steps_tests = 500
-    verbose = True
-    PERF_THRESHOLD = 0.7
+# define parameters configuration
+    env_seed = 123
+    total_num_timesteps = 6000
+    num_periods = 2000
+    env_seed = 123
+    num_periods = 40
+    TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/foragingRNNs_data/nets/'
-
-    # put the parameters in a dictionary
-    task_params = {'env_seed': 8, 'w_factor': 0.00001,
-                   'mean_ITI': 200, 'max_ITI': 400,
-                   'fix_dur': 100, 'dec_dur': 100, 'blk_dur': 50,
-                   'probs': np.array([0.1, 0.9])}
-    folder = (f"{main_folder}w{task_params['w_factor']}_mITI{task_params['mean_ITI']}"
-              f"_xITI{task_params['max_ITI']}_f{task_params['fix_dur']}_"
-              f"d{task_params['dec_dur']}_nb{np.round(task_params['blk_dur']/1e3, 1)}_"
-              f"prb{task_params['probs'][0]}")
+    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    filename = 'training_nets.csv'
+    # Set up the task
+    w_factor = 0.00001
+    mean_ITI = 200
+    max_ITI = 400
+    fix_dur = 100
+    dec_dur = 100
+    blk_dur = 50
+    probs = np.array([0.1, 0.9])
+    num_epochs = 100 # ??
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
+                'blk_dur': blk_dur, 'timing':
+                    {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+                        # mean, min, max
+                        'fixation': fix_dur, 'decision': dec_dur},
+                    # Decision period}
+                    'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+    TRAINING_KWARGS['classes_weights'] =\
+        torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
+                    w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
+    # call function to sample
+    env = gym.make(TASK, **env_kwargs)
+    env = pass_reward.PassReward(env)
+    env = pass_action.PassAction(env)
+    # set seed
+    env.seed(env_seed)
+    env.reset()
+    net_kwargs = {'hidden_size': 128,
+                'action_size': env.action_space.n,
+                'input_size': env.observation_space.shape[0]}
+    TRAINING_KWARGS['env_kwargs'] = env_kwargs
+    TRAINING_KWARGS['net_kwargs'] = net_kwargs
 
     # create folder to save data based on parameters
-    ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'probs': task_params['probs'],
-                  'blk_dur': task_params['blk_dur'], 'timing':
-                    {'ITI': ngym_f.random.TruncExp(task_params['mean_ITI'], 100, task_params['max_ITI']), # mean, min, max
-                     'fixation': task_params['fix_dur'], 'decision': task_params['dec_dur']}} # Decision period
-    # change specific parameters to test the network in different environments
-    mean_ITI_test = [200, 400, 600, 800]
-    max_ITI_test = [400, 600, 800, 1000]
-    for mITI, mxITI in zip(mean_ITI_test, max_ITI_test):
-        ENV_KWARGS['timing']['ITI'] = ngym_f.random.TruncExp(mITI, 100, mxITI)
-        # create folder name to save test data
-        save_folder = (f"{folder}/mITI{mITI}"
-                f"_xITI{mxITI}_f{ENV_KWARGS['timing']['fixation']}_"
-                f"d{ENV_KWARGS['timing']['decision']}_nb{np.round(ENV_KWARGS['blk_dur']/1e3, 1)}_"
-                f"prb{ENV_KWARGS['probs'][0]}")
-        # create save folder
-        os.makedirs(save_folder, exist_ok=True)
-        # Set up the task
-        # call function to sample
-        env = gym.make(TASK, **ENV_KWARGS)
-        env = pass_reward.PassReward(env)
-        env = pass_action.PassAction(env)
-        # set seed
-        env.seed(123)
-        env.reset()
+    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                    f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
+                    f"prb{probs[0]}")
 
-        NET_KWARGS = {'hidden_size': 64,
-                    'action_size': env.action_space.n,
-                    'input_size': env.observation_space.shape[0]}
+    # Save config as npz
+    np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
 
-        test_networks(folder=folder, env=env, take_best=take_best,verbose=verbose,
-                      num_steps_tests=num_steps_tests, sv_folder=save_folder)
+    num_epochs = TRAINING_KWARGS['n_epochs']
+    num_steps_plot = 100
+    num_steps_test = 1000
+    debug = False
+    num_networks = 4
+    criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
+    train = False
+    # define parameter to explore
+    seq_len_mat = np.array([50, 300, 1000])
+
+    mperf_lists = get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
+
+    # plt.close('all')
+    # take_best = True
+    # num_steps_tests = 500
+    # verbose = True
+    # PERF_THRESHOLD = 0.7
+    # # create folder to save data based on env seed
+    # # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+
+    # # put the parameters in a dictionary
+    # task_params = {'env_seed': 8, 'w_factor': 0.00001,
+    #                'mean_ITI': 200, 'max_ITI': 400,
+    #                'fix_dur': 100, 'dec_dur': 100, 'blk_dur': 50,
+    #                'probs': np.array([0.1, 0.9])}
+    # folder = (f"{main_folder}w{task_params['w_factor']}_mITI{task_params['mean_ITI']}"
+    #           f"_xITI{task_params['max_ITI']}_f{task_params['fix_dur']}_"
+    #           f"d{task_params['dec_dur']}_nb{np.round(task_params['blk_dur']/1e3, 1)}_"
+    #           f"prb{task_params['probs'][0]}")
+
+    # # create folder to save data based on parameters
+    # ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'probs': task_params['probs'],
+    #               'blk_dur': task_params['blk_dur'], 'timing':
+    #                 {'ITI': ngym_f.random.TruncExp(task_params['mean_ITI'], 100, task_params['max_ITI']), # mean, min, max
+    #                  'fixation': task_params['fix_dur'], 'decision': task_params['dec_dur']}} # Decision period
+    # # change specific parameters to test the network in different environments
+    # mean_ITI_test = [200, 400, 600, 800]
+    # max_ITI_test = [400, 600, 800, 1000]
+    # for mITI, mxITI in zip(mean_ITI_test, max_ITI_test):
+    #     ENV_KWARGS['timing']['ITI'] = ngym_f.random.TruncExp(mITI, 100, mxITI)
+    #     # create folder name to save test data
+    #     save_folder = (f"{folder}/mITI{mITI}"
+    #             f"_xITI{mxITI}_f{ENV_KWARGS['timing']['fixation']}_"
+    #             f"d{ENV_KWARGS['timing']['decision']}_nb{np.round(ENV_KWARGS['blk_dur']/1e3, 1)}_"
+    #             f"prb{ENV_KWARGS['probs'][0]}")
+    #     # create save folder
+    #     os.makedirs(save_folder, exist_ok=True)
+    #     # Set up the task
+    #     # call function to sample
+    #     env = gym.make(TASK, **ENV_KWARGS)
+    #     env = pass_reward.PassReward(env)
+    #     env = pass_action.PassAction(env)
+    #     # set seed
+    #     env.seed(123)
+    #     env.reset()
+
+    #     NET_KWARGS = {'hidden_size': 64,
+    #                 'action_size': env.action_space.n,
+    #                 'input_size': env.observation_space.shape[0]}
+
+    #     test_networks(folder=folder, env=env, take_best=take_best,verbose=verbose,
+    #                   num_steps_tests=num_steps_tests, sv_folder=save_folder)

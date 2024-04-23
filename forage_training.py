@@ -15,7 +15,6 @@ from scipy.special import erf
 import pandas as pd
 import numpy as np
 import os
-import sys
 
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -318,11 +317,9 @@ def train_network(num_periods, criterion, env,
     error_fixation_list = []
     error_2_list = []
     error_3_list = []
-    log_per = 200
-    minimum_loss = 1e6
-    best_net = net
+    log_per = 20
+    minimum_perf = 1e6
     # open txt file to save data
-    # TODO: get seq_len as an input parameter
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
                                         num_steps_exp=seq_len)
@@ -353,17 +350,16 @@ def train_network(num_periods, criterion, env,
         loss_step = loss.item()
         loss_1st_ep_list.append(loss_step)
         # print loss
-        if i_per % log_per == log_per-1 and loss_step < minimum_loss:
+        if i_per % log_per == log_per-1 and data['mean_perf'] < minimum_perf:
             with open(save_folder + '/training_data.txt', 'w') as f:
                 f.write('------------\n')
                 f.write('Period: ' + str(i_per) + ' of ' + str(num_periods) + '\n')
-                f.write('mean performance: ' + str(data['mean_perf']) + '\n')
-                f.write('mean reward: ' + str(data['mean_rew']) + '\n')
+                f.write('Mean performance: ' + str(data['mean_perf']) + '\n')
+                f.write('Mean reward: ' + str(data['mean_rew']) + '\n')
                 f.write('Loss: ' + str(loss_step) + '\n')
             # save net
             torch.save(net, save_folder + '/net.pth')
-            minimum_loss = loss_step
-            best_net = net
+            minimum_perf = data['mean_perf']
 
         error_dict = compute_error(data)
         error_no_action_list.append(error_dict['error_no_action'])
@@ -376,7 +372,7 @@ def train_network(num_periods, criterion, env,
             'error_fixation_list': error_fixation_list,
             'error_2_list': error_2_list,
             'error_3_list': error_3_list}
-    return dict, best_net, df
+    return dict
 
 
 def preprocess_activity(activity):
@@ -617,13 +613,13 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
 
-        data_behav, net, _ = train_network(num_periods=num_periods,
-                                            criterion=criterion,
-                                            env=env, net_kwargs=net_kwargs,
-                                            env_kwargs=env_kwargs,
-                                            seq_len=seq_len,
-                                            debug=debug, seed=seed,
-                                            save_folder=save_folder_net)
+        data_behav = train_network(num_periods=num_periods,
+                                   criterion=criterion,
+                                   env=env, net_kwargs=net_kwargs,
+                                   env_kwargs=env_kwargs,
+                                   seq_len=seq_len,
+                                   debug=debug, seed=seed,
+                                   save_folder=save_folder_net)
         # save data as npz
         np.savez(save_folder_net + '/data.npz', **data_behav)
 
@@ -642,6 +638,15 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         plot_error(num_periods, error_no_action_list,
                    error_fixation_list,  error_2_list, error_3_list,
                    save_folder_net)
+        # load network
+        net = Net(input_size=net_kwargs['input_size'],
+                hidden_size=net_kwargs['hidden_size'],
+                output_size=env.action_space.n, seed=seed)
+
+        # Move network to the device (CPU or GPU)
+        net = net.to(DEVICE)
+        net = torch.load(save_folder_net+'/net.pth')
+
         with torch.no_grad():
             data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
                                             net=net)
