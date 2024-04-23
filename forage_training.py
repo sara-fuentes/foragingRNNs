@@ -611,7 +611,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
 
-        data_behav, net, df = train_network(num_periods=num_periods,
+        data_behav, net, _ = train_network(num_periods=num_periods,
                                             criterion=criterion,
                                             env=env, net_kwargs=net_kwargs,
                                             env_kwargs=env_kwargs,
@@ -636,21 +636,23 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         plot_error(num_periods, error_no_action_list,
                    error_fixation_list,  error_2_list, error_3_list,
                    save_folder_net)
-        data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
-                                        net=net)
-        mperf_list.append(data['mean_perf'])
-        plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
-                  save_folder=save_folder_net)
-        plot_performace_by_iti(data, save_folder=save_folder_net)
-        plt.close('all')
+        with torch.no_grad():
+            data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
+                                            net=net)
+            mperf_list.append(data['mean_perf'])
+            plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
+                    save_folder=save_folder_net)
+            plot_performace_by_iti(data, save_folder=save_folder_net)
+            plt.close('all')
+            df = dict2df(data)
 
-        # save the data fom the net in the dataframe
-        training_df = process_dataframe(main_folder=main_folder, num_periods=num_periods,
-                                        filename=filename, df=df,
-                                        save_folder=save_folder,
-                                        env_seed=env_seed, seed=seed,
-                                        mean_ITI=mean_ITI, fix_dur=fix_dur,
-                                        blk_dur=blk_dur, seq_len=seq_len)
+            # save the data fom the net in the dataframe
+            training_df = process_dataframe(main_folder=main_folder, num_periods=num_periods,
+                                            filename=filename, df=df,
+                                            save_folder=save_folder,
+                                            env_seed=env_seed, seed=seed,
+                                            mean_ITI=mean_ITI, fix_dur=fix_dur,
+                                            blk_dur=blk_dur, seq_len=seq_len)
     return mperf_list, training_df
 
 # --- MAIN
