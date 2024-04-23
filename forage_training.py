@@ -320,6 +320,8 @@ def train_network(num_periods, criterion, env,
     error_3_list = []
     log_per = 200
     minimum_loss = 1e6
+    best_net = net
+    # open txt file to save data
     # TODO: get seq_len as an input parameter
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
@@ -352,13 +354,14 @@ def train_network(num_periods, criterion, env,
         loss_1st_ep_list.append(loss_step)
         # print loss
         if i_per % log_per == log_per-1 and loss_step < minimum_loss:
-            print('------------')
-            print('Period: ', i_per, 'of', num_periods)
-            print('mean performance: ', data['mean_perf'])
-            print('mean reward: ', data['mean_rew'])
-            print('Loss: ', loss_step)
+            with open(save_folder + '/training_data.txt', 'w') as f:
+                f.write('------------\n')
+                f.write('Period: ' + str(i_per) + ' of ' + str(num_periods) + '\n')
+                f.write('mean performance: ' + str(data['mean_perf']) + '\n')
+                f.write('mean reward: ' + str(data['mean_rew']) + '\n')
+                f.write('Loss: ' + str(loss_step) + '\n')
             # save net
-            torch.save(net, save_folder + '/net' + str(i_per) + '.pth')
+            torch.save(net, save_folder + '/net.pth')
             minimum_loss = loss_step
             best_net = net
 
