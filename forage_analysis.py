@@ -350,25 +350,29 @@ def test_networks(folder, env, take_best, sv_folder, verbose=False,
     return data
 # TODO: create a function that tests the network in different environments
 
-def plot_mean_perf_by_seq_len(mperf_lists, seq_len_list):
+def plot_mean_perf_by_seq_len(mperfs):
     # boxplot of mean performance by sequence length
-    f, ax = plt.subplots(1, 1, figsize=(10, 6))
-    sns.boxplot(data=mperf_lists, ax=ax)
-    
-    # Add dots for individual data points
-    sns.stripplot(data=mperf_lists, color='k', size=5, ax=ax)
-    
-    ax.set_xticklabels(seq_len_list)
-    ax.set_xlabel('Sequence length')
-    ax.set_ylabel('Mean performance')
-    ax.set_title('Boxplot of Mean Performance by Sequence Length')
-    
+    sns.set(style="whitegrid")
+
+    # Create a line plot
+    plt.figure(figsize=(10, 6))  # You can adjust the size of the figure
+    sns.violinplot(data=mperfs, x='seq_len', y='performance', cut=0)
+    # Add a swarm plot
+    sns.swarmplot(data=mperfs, x='seq_len', y='performance', color='k', size=8, alpha=0.3)
+
+    plt.title('Performance as Function of Sequence Length')
+    plt.xlabel('Sequence Length')
+    plt.ylabel('Average Performance')
+    plt.legend(title='Net Seed', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+
+    # Show the plot
     plt.show()
 
 
 def get_mean_perf_by_seq_len(main_folder, filename,
-                                seq_len_mat, w_factor, mean_ITI, max_ITI,
-                                fix_dur, dec_dur, blk_dur, probs):
+                            seq_len_mat, w_factor, mean_ITI, max_ITI,
+                            fix_dur, dec_dur, blk_dur, probs, plot=True):
     
     df_path = os.path.join(main_folder, filename)
     df = pd.read_csv(df_path)
@@ -381,6 +385,9 @@ def get_mean_perf_by_seq_len(main_folder, filename,
     # Filter DataFrame by env_seed and select_folder
     filtered_df = df[(df['params'] == param_str)]
 
+    # remove rows with sequence length not in seq_len_mat
+    filtered_df = filtered_df[filtered_df['seq_len'].isin(seq_len_mat)]
+
     # add column called performance showing wether action was equal to gt
     filtered_df['performance'] = (filtered_df['actions'] == filtered_df['gt']).astype(int)
 
@@ -388,16 +395,8 @@ def get_mean_perf_by_seq_len(main_folder, filename,
     grouped_df = filtered_df.groupby(['seq_len', 'net_seed'])
 
     mperfs = grouped_df['performance'].mean().reset_index()
-
-    # List to store mean performances for each seq_len across all nets
-    mperf_lists = []
-
-    for seq_len in seq_len_mat:
-        seq_len_df = grouped_df[grouped_df['seq_len'] == seq_len]
-        mperf_list = seq_len_df['performance'].tolist()
-        mperf_lists.append(mperf_list)
-    
-    return mperf_lists
+    if plot:
+        plot_mean_perf_by_seq_len(mperfs)
 
 
 

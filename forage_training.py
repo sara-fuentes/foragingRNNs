@@ -534,7 +534,7 @@ def plot_performace_by_iti(data, save_folder):
 
 
 def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
-                      mean_ITI, fix_dur, blk_dur, seq_len):
+                      mean_ITI, fix_dur, blk_dur, seq_len, num_periods):
     """
     Process a dataframe located in the specified folder.
     If the dataframe exists, modify it. Otherwise, create it with desired
@@ -555,7 +555,7 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     """
     columns = ['params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
                'prob_r', 'reward', 'mean_ITI', 'fix_dur',
-               'blk_dur', 'seq_len']
+               'blk_dur', 'seq_len', 'num_periods']
     # Check if the folder exists, if not, create it
     # if not os.path.exists(main_folder):
     #     os.makedirs(main_folder)
@@ -582,7 +582,8 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
                                   'mean_ITI': [mean_ITI]*len(df),
                                   'fix_dur': [fix_dur]*len(df),
                                   'blk_dur': [blk_dur]*len(df),
-                                  'seq_len': [seq_len]*len(df)})
+                                  'seq_len': [seq_len]*len(df)
+                                  'num_periods': [num_periods]*len(df)})
     result_df = pd.concat([df, values_to_add], axis=1)
     # reset index after concatenation
     result_df.reset_index(drop=True, inplace=True)
@@ -604,9 +605,9 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                             num_steps_plot=100):
     mperf_list = []
     for _ in range(num_networks):
-        seed = np.random.randint(0, 10000)
-        # create folder to save data based on net seed
-        save_folder_net = save_folder + '/' + str(env_seed)
+        seed = np.random.randint(0, 1000000)
+        # create folder to save data based on net seed and env seed
+        save_folder_net = save_folder + '/envS_' + str(env_seed) + '_netS_' + str(seed)
         # create folder to save data based on net seed
         os.makedirs(save_folder_net, exist_ok=True)
 
@@ -644,7 +645,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
         plt.close('all')
 
         # save the data fom the net in the dataframe
-        training_df = process_dataframe(main_folder=main_folder,
+        training_df = process_dataframe(main_folder=main_folder, num_periods=num_periods,
                                         filename=filename, df=df,
                                         save_folder=save_folder,
                                         env_seed=env_seed, seed=seed,
