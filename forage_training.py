@@ -582,7 +582,7 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
                                   'mean_ITI': [mean_ITI]*len(df),
                                   'fix_dur': [fix_dur]*len(df),
                                   'blk_dur': [blk_dur]*len(df),
-                                  'seq_len': [seq_len]*len(df)
+                                  'seq_len': [seq_len]*len(df),
                                   'num_periods': [num_periods]*len(df)})
     result_df = pd.concat([df, values_to_add], axis=1)
     # reset index after concatenation
