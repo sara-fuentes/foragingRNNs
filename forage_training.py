@@ -308,6 +308,7 @@ def train_network(num_periods, criterion, env,
 
     # Move network to the device (CPU or GPU)
     net = net.to(DEVICE)
+    torch.save(net, save_folder + '/net.pth')
     optimizer = torch.optim.Adam(net.parameters(), lr=TRAINING_KWARGS['lr'])
 
     mean_perf_list = []
@@ -622,22 +623,22 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                                    save_folder=save_folder_net)
         # save data as npz
         np.savez(save_folder_net + '/data.npz', **data_behav)
+        if debug:
+            # get data from data_behav
+            mean_perf_list = data_behav['mean_perf_list']
+            mean_rew_list = data_behav['mean_rew_list']
+            loss_1st_ep_list = data_behav['loss_1st_ep_list']
+            error_no_action_list = data_behav['error_no_action_list']
+            error_fixation_list = data_behav['error_fixation_list']
+            error_2_list = data_behav['error_2_list']
+            error_3_list = data_behav['error_3_list']
+            plot_perf_rew_loss(num_periods, mean_perf_list,
+                            mean_rew_list,
+                            loss_1st_ep_list, save_folder_net)
 
-        # get data from data_behav
-        mean_perf_list = data_behav['mean_perf_list']
-        mean_rew_list = data_behav['mean_rew_list']
-        loss_1st_ep_list = data_behav['loss_1st_ep_list']
-        error_no_action_list = data_behav['error_no_action_list']
-        error_fixation_list = data_behav['error_fixation_list']
-        error_2_list = data_behav['error_2_list']
-        error_3_list = data_behav['error_3_list']
-        plot_perf_rew_loss(num_periods, mean_perf_list,
-                           mean_rew_list,
-                           loss_1st_ep_list, save_folder_net)
-
-        plot_error(num_periods, error_no_action_list,
-                   error_fixation_list,  error_2_list, error_3_list,
-                   save_folder_net)
+            plot_error(num_periods, error_no_action_list,
+                    error_fixation_list,  error_2_list, error_3_list,
+                    save_folder_net)
         # load network
         net = Net(input_size=net_kwargs['input_size'],
                 hidden_size=net_kwargs['hidden_size'],

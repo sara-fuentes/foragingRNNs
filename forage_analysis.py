@@ -367,8 +367,17 @@ def plot_mean_perf_by_seq_len(mperfs):
     plt.legend(title='Net Seed', bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
 
+    plt.figure(figsize=(12, 6))  # You can adjust the size of the figure
+    # Create histograms for each sequence length
+    g = sns.FacetGrid(mperfs, col="seq_len", col_wrap=4, height=3)
+    g.map(sns.histplot, "performance")
+
+    plt.subplots_adjust(top=0.9)
     # Show the plot
     plt.show()
+    # Calculate basic statistics
+    stats = mperfs.groupby('seq_len')['performance'].agg(['count', 'mean', 'std']).reset_index()
+    print(stats)
 
 
 def get_mean_perf_by_seq_len(main_folder, filename,
