@@ -376,7 +376,7 @@ def plot_mean_perf_by_seq_len(mperfs):
     # Show the plot
     plt.show()
     # Calculate basic statistics
-    stats = mperfs.groupby('seq_len')['performance'].agg(['count', 'mean', 'std']).reset_index()
+    stats = mperfs.groupby('seq_len')['performance'].agg(['count', 'mean', 'std', 'min', 'max']).reset_index()
     print(stats)
 
 
