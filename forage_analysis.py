@@ -382,7 +382,7 @@ def plot_mean_perf_by_seq_len(mperfs):
 
 def get_mean_perf_by_seq_len(main_folder, filename,
                             seq_len_mat, w_factor, mean_ITI, max_ITI,
-                            fix_dur, dec_dur, blk_dur, probs, plot=True):
+                            fix_dur, dec_dur, blk_dur, probs, min_nper= 2000, plot=True):
     
     df_path = os.path.join(main_folder, filename)
     df = pd.read_csv(df_path)
@@ -397,6 +397,9 @@ def get_mean_perf_by_seq_len(main_folder, filename,
 
     # remove rows with sequence length not in seq_len_mat
     filtered_df = filtered_df[filtered_df['seq_len'].isin(seq_len_mat)]
+
+    # remove rows with num_periods smaller than 5000
+    filtered_df = filtered_df[filtered_df['num_periods'] >= min_nper]
 
     # add column called performance showing wether action was equal to gt
     filtered_df['performance'] = (filtered_df['actions'] == filtered_df['gt']).astype(int)
