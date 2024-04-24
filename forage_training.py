@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch
 import ngym_foraging as ngym_f
 from ngym_foraging.wrappers import pass_reward, pass_action
+import forage_analysis as fa
 import gym
 import matplotlib.pyplot as plt
 from scipy.special import erf
@@ -29,6 +30,26 @@ TRAINING_KWARGS = {'dt': 100,
                    'seq_len': 300,
                    'TASK': TASK}
 
+def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
+               blk_dur, probs):
+    """
+    Create an environment with the specified parameters.
+    """
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
+                'blk_dur': blk_dur, 'timing':
+                    {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+                        # mean, min, max
+                        'fixation': fix_dur, 'decision': dec_dur},
+                    # Decision period}
+                    'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+    # call function to sample
+    env = gym.make(TASK, **env_kwargs)
+    env = pass_reward.PassReward(env)
+    env = pass_action.PassAction(env)
+    # set seed
+    env.seed(env_seed)
+    env.reset()
+    return env_kwargs, env
 
 class Net(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, seed=0):
@@ -601,11 +622,18 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     return training_df
 
 
-def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
+def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
                             num_networks, env, env_seed, main_folder,
-                            save_folder, filename, env_kwargs, net_kwargs, criterion,
+                            save_folder, filename, env_kwargs, net_kwargs,
                             num_periods, seq_len, debug=False, num_steps_test=1000,
-                            num_steps_plot=100):
+                            num_steps_plot=100,lr=None):
+    if lr is not None:
+        TRAINING_KWARGS['lr'] = lr
+    # set weights for the loss function
+    class_weights =\
+    torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
+                    w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     mperf_list = []
     for _ in range(num_networks):
         seed = np.random.randint(0, 1000000)
@@ -666,6 +694,82 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur,
                                             mean_ITI=mean_ITI, fix_dur=fix_dur,
                                             blk_dur=blk_dur, seq_len=seq_len)
     return mperf_list, training_df
+
+
+if __name__ == '__main__':
+# define parameters configuration
+    env_seed = 123
+    total_num_timesteps = 600000
+    num_periods = total_num_timesteps // 300
+    num_steps_plot = 100
+    num_steps_test = 10000
+    num_networks = 20
+    # create folder to save data based on env seed
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    test_flag = ''
+    filename = 'training_data'+test_flag+'.csv'
+    # Set up the task
+    w_factor = 0.00001
+    mean_ITI = 200
+    max_ITI = 400
+    fix_dur = 100
+    dec_dur = 100
+    blk_dur = 50
+    probs = np.array([0.1, 0.9])
+    # create the environment with the parameters
+    env_kwargs, env = create_env(env_seed=env_seed, mean_ITI=mean_ITI, max_ITI=max_ITI,
+                                fix_dur=fix_dur, dec_dur=dec_dur,
+                                blk_dur=blk_dur, probs=probs)
+    net_kwargs = {'hidden_size': 128,
+                'action_size': env.action_space.n,
+                'input_size': env.observation_space.shape[0]}
+
+
+    # create folder to save data based on parameters
+    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                    f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
+                    f"prb{probs[0]}_lr{TRAINING_KWARGS['lr']}")
+    train = True
+    # define parameter to explore
+    seq_len_mat = np.array([50, 300, 1000])
+
+
+    if train:
+        for seq_len in seq_len_mat:
+            print(f"Training networks with seq_len = {seq_len}")
+            num_periods = total_num_timesteps // seq_len
+            _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
+                                        num_networks=num_networks, env=env, w_factor=w_factor,
+                                        env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
+                                        filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
+                                        num_periods=num_periods, seq_len=seq_len)
+
+    mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
+
+
+    # # create folder to save data based on parameters
+    # save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+    #                 f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
+    #                 f"prb{probs[0]}_seq_len{seq_len}")
+    # train = False
+    # # define parameter to explore
+    # lr_mat = np.array([1e-3, 1e-2, 3e-2])
+
+
+    # if train:
+    #     for lr in lr_mat:
+    #         print(f"Training networks with seq_len = {seq_len}")
+    #         num_periods = total_num_timesteps // seq_len
+    #         _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
+    #                                     num_networks=num_networks, env=env, w_factor=w_factor,
+    #                                     env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
+    #                                     filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
+    #                                     num_periods=num_periods, seq_len=seq_len, lr=lr)
+
+    # mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
+
+
 
 # --- MAIN
 # if __name__ == '__main__':
