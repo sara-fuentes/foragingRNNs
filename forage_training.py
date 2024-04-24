@@ -699,15 +699,15 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
 if __name__ == '__main__':
 # define parameters configuration
     env_seed = 123
-    total_num_timesteps = 600000
+    total_num_timesteps = 6000
     num_periods = total_num_timesteps // 300
     num_steps_plot = 100
     num_steps_test = 10000
-    num_networks = 20
+    num_networks = 4
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
-    test_flag = ''
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    test_flag = 'test'
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
     w_factor = 0.00001
@@ -727,47 +727,50 @@ if __name__ == '__main__':
 
 
     # create folder to save data based on parameters
-    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                    f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
-                    f"prb{probs[0]}_lr{TRAINING_KWARGS['lr']}")
-    train = True
-    # define parameter to explore
-    seq_len_mat = np.array([50, 300, 1000])
-
-
-    if train:
-        for seq_len in seq_len_mat:
-            print(f"Training networks with seq_len = {seq_len}")
-            num_periods = total_num_timesteps // seq_len
-            _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
-                                        num_networks=num_networks, env=env, w_factor=w_factor,
-                                        env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
-                                        filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-                                        num_periods=num_periods, seq_len=seq_len)
-
-    mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
-
-
-    # # create folder to save data based on parameters
     # save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
     #                 f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
-    #                 f"prb{probs[0]}_seq_len{seq_len}")
+    #                 f"prb{probs[0]}_lr{TRAINING_KWARGS['lr']}")
     # train = False
     # # define parameter to explore
-    # lr_mat = np.array([1e-3, 1e-2, 3e-2])
+    # seq_len_mat = np.array([50, 300, 1000])
 
 
     # if train:
-    #     for lr in lr_mat:
+    #     for seq_len in seq_len_mat:
     #         print(f"Training networks with seq_len = {seq_len}")
     #         num_periods = total_num_timesteps // seq_len
     #         _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
     #                                     num_networks=num_networks, env=env, w_factor=w_factor,
     #                                     env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
     #                                     filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-    #                                     num_periods=num_periods, seq_len=seq_len, lr=lr)
+    #                                     num_periods=num_periods, seq_len=seq_len)
 
     # mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
+
+    seq_len = 300
+
+    # create folder to save data based on parameters
+    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                    f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
+                    f"prb{probs[0]}_seq_len{seq_len}")
+    train = True
+    # define parameter to explore
+    lr_mat = np.array([1e-3, 1e-2, 3e-2])
+
+    total_num_timesteps = 600000
+    num_periods = total_num_timesteps // 300
+
+
+    if train:
+        for lr in lr_mat:
+            print(f"Training networks with lr = {lr}")
+            _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
+                                        num_networks=num_networks, env=env, w_factor=w_factor,
+                                        env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
+                                        filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
+                                        num_periods=num_periods, seq_len=seq_len, lr=lr)
+
+    mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, lr_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
 
 
 
