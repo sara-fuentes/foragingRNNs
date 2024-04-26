@@ -16,6 +16,9 @@ from scipy.special import erf
 import pandas as pd
 import numpy as np
 import os
+import tkinter as tk
+from tkinter import simpledialog
+
 
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -558,7 +561,7 @@ def plot_performace_by_iti(data, save_folder):
 
 
 def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
-                      mean_ITI, fix_dur, blk_dur, seq_len, num_periods):
+                      mean_ITI, fix_dur, blk_dur, seq_len, num_periods, lr):
     """
     Process a dataframe located in the specified folder.
     If the dataframe exists, modify it. Otherwise, create it with desired
@@ -579,7 +582,7 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     """
     columns = ['params', 'env_seed', 'net_seed', 'actions', 'gt', 'iti',
                'prob_r', 'reward', 'mean_ITI', 'fix_dur',
-               'blk_dur', 'seq_len', 'num_periods']
+               'blk_dur', 'seq_len', 'num_periods', 'lr']
     # Check if the folder exists, if not, create it
     # if not os.path.exists(main_folder):
     #     os.makedirs(main_folder)
@@ -607,7 +610,8 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
                                   'fix_dur': [fix_dur]*len(df),
                                   'blk_dur': [blk_dur]*len(df),
                                   'seq_len': [seq_len]*len(df),
-                                  'num_periods': [num_periods]*len(df)})
+                                  'num_periods': [num_periods]*len(df),
+                                  'lr': [lr]*len(df)})
     result_df = pd.concat([df, values_to_add], axis=1)
     # reset index after concatenation
     result_df.reset_index(drop=True, inplace=True)
@@ -699,15 +703,30 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
 if __name__ == '__main__':
 # define parameters configuration
     env_seed = 123
-    total_num_timesteps = 6000
+    total_num_timesteps = 600000
     num_periods = total_num_timesteps // 300
     num_steps_plot = 100
     num_steps_test = 10000
-    num_networks = 4
+    num_networks = 20
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     # main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
-    test_flag = 'test'
+
+    # Create the main Tkinter window
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    
+    # Prompt the user for input using a pop-up dialog
+    experiment_type = simpledialog.askstring("Experiment Type", "Are you running a normal experiment (press Enter) or a test ('test')?")
+
+
+    # Determine the variable based on user input
+    if experiment_type == "test":
+        test_flag = "test"
+    else:
+        test_flag = ""
+
+    
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
     w_factor = 0.00001
@@ -753,7 +772,7 @@ if __name__ == '__main__':
     save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
                     f"prb{probs[0]}_seq_len{seq_len}")
-    train = True
+    train = False
     # define parameter to explore
     lr_mat = np.array([1e-3, 1e-2, 3e-2])
 
@@ -770,7 +789,10 @@ if __name__ == '__main__':
                                         filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
                                         num_periods=num_periods, seq_len=seq_len, lr=lr)
 
-    mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, lr_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
+    mperf_lists = fa.get_mean_perf_by_param(param='lr', main_folder=main_folder, filename=filename,
+                                            param_mat=lr_mat, w_factor=w_factor, mean_ITI=mean_ITI, max_ITI=max_ITI,
+                                            fix_dur=fix_dur, dec_dur=dec_dur, blk_dur=blk_dur, probs=probs)
+
 
 
 

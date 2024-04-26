@@ -351,53 +351,61 @@ def test_networks(folder, env, take_best, sv_folder, verbose=False,
     return data
 # TODO: create a function that tests the network in different environments
 
-def plot_mean_perf_by_seq_len(mperfs):
+
+def plot_mean_perf_by_param(mperfs, param):
     # boxplot of mean performance by sequence length
     sns.set(style="whitegrid")
 
     # Create a line plot
     plt.figure(figsize=(10, 6))  # You can adjust the size of the figure
-    sns.violinplot(data=mperfs, x='seq_len', y='performance', cut=0)
+    sns.violinplot(data=mperfs, x=param, y='performance', cut=0)
     # Add a swarm plot
-    sns.swarmplot(data=mperfs, x='seq_len', y='performance', color='k', size=8, alpha=0.3)
+    sns.swarmplot(data=mperfs, x=param, y='performance', color='k', size=8, alpha=0.3)
 
-    plt.title('Performance as Function of Sequence Length')
-    plt.xlabel('Sequence Length')
+    plt.title('Performance as Function of '+param)
+    plt.xlabel(param)
     plt.ylabel('Average Performance')
     plt.legend(title='Net Seed', bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
 
     plt.figure(figsize=(12, 6))  # You can adjust the size of the figure
     # Create histograms for each sequence length
-    g = sns.FacetGrid(mperfs, col="seq_len", col_wrap=4, height=3)
+    g = sns.FacetGrid(mperfs, col=param, col_wrap=4, height=3)
     g.map(sns.histplot, "performance")
 
     plt.subplots_adjust(top=0.9)
     # Show the plot
     plt.show()
     # Calculate basic statistics
-    stats = mperfs.groupby('seq_len')['performance'].agg(['count', 'mean', 'std', 'min', 'max']).reset_index()
+    stats = mperfs.groupby(param)['performance'].agg(['count', 'mean', 'std', 'min', 'max']).reset_index()
     print(stats)
 
 
-def get_mean_perf_by_seq_len(main_folder, filename,
-                            seq_len_mat, w_factor, mean_ITI, max_ITI,
-                            fix_dur, dec_dur, blk_dur, probs, min_nsteps=300000, plot=True):
+def get_mean_perf_by_param(param, main_folder, filename, param_mat, w_factor, mean_ITI, max_ITI,
+                           fix_dur, dec_dur, probs, blk_dur=50, seq_len=300,
+                           min_nsteps=300000, plot=True):
     
     df_path = os.path.join(main_folder, filename)
     df = pd.read_csv(df_path)
-
-    # Create param string to select nets
-    param_str = (f"w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
-                f"prb{probs[0]}")
+    
+    if param == 'seq_len':
+        param_str = (f"w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                    f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
+                    f"prb{probs[0]}")
+    
+    if param == 'lr':
+        param_str = (f"w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+            f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
+            f"prb{probs[0]}_seq_len{seq_len}")
+    
+    # Sect nets according to parameters
+    filtered_df = df[df['params'] == param_str]
 
     # Filter DataFrame by env_seed and select_folder
     # filtered_df = df[(df['params'] == param_str)]
 
-    # remove rows with sequence length not in seq_len_mat
-    filtered_df = filtered_df[filtered_df['seq_len'].isin(seq_len_mat)]
-
+    # remove rows with sequence length not in param_mat
+    filtered_df = filtered_df[filtered_df[param].isin(param_mat)]
     
     # remove rows with num_periods smaller than 5000
     filtered_df = filtered_df[filtered_df['num_periods']*filtered_df['seq_len'] >= min_nsteps]
@@ -405,13 +413,15 @@ def get_mean_perf_by_seq_len(main_folder, filename,
     # add column called performance showing wether action was equal to gt
     filtered_df['performance'] = (filtered_df['actions'] == filtered_df['gt']).astype(int)
 
-    # compute average grouping by seq_len and net_seed using groupby
-    grouped_df = filtered_df.groupby(['seq_len', 'net_seed'])
+    # compute average grouping by param and net_seed using groupby
+    grouped_df = filtered_df.groupby([param, 'net_seed'])
 
     mperfs = grouped_df['performance'].mean().reset_index()
     if plot:
-        plot_mean_perf_by_seq_len(mperfs)
+        plot_mean_perf_by_param(mperfs=mperfs, param=param)
 
+
+    
 
 
 # --- MAIN
@@ -424,9 +434,9 @@ if __name__ == '__main__':
     num_periods = 40
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
-    filename = 'training_nets.csv'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    filename = 'training_data.csv'
     # Set up the task
     w_factor = 0.00001
     mean_ITI = 200
@@ -477,7 +487,7 @@ if __name__ == '__main__':
     # define parameter to explore
     seq_len_mat = np.array([50, 300, 1000])
 
-    mperf_lists = get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
+    mperf_lists = get_mean_perf_by_param(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
 
     # plt.close('all')
     # take_best = True
