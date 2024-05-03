@@ -701,7 +701,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
 
 
 if __name__ == '__main__':
-# define parameters configuration
+    # define parameters configuration
     env_seed = 123
     total_num_timesteps = 600000
     num_periods = total_num_timesteps // 300
@@ -719,14 +719,12 @@ if __name__ == '__main__':
     # Prompt the user for input using a pop-up dialog
     experiment_type = simpledialog.askstring("Experiment Type", "Are you running a normal experiment (press Enter) or a test ('test')?")
 
-
     # Determine the variable based on user input
     if experiment_type == "test":
         test_flag = "test"
     else:
         test_flag = ""
 
-    
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
     w_factor = 0.00001
@@ -766,33 +764,41 @@ if __name__ == '__main__':
 
     # mperf_lists = fa.get_mean_perf_by_seq_len(main_folder, filename, seq_len_mat, w_factor, mean_ITI, max_ITI, fix_dur, dec_dur, blk_dur, probs)
 
-    seq_len = 300
+    # seq_len = 300
 
-    # create folder to save data based on parameters
-    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                    f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
-                    f"prb{probs[0]}_seq_len{seq_len}")
-    train = False
-    # define parameter to explore
+    # # create folder to save data based on parameters
+    # save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+    #                 f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
+    #                 f"prb{probs[0]}_seq_len{seq_len}")
+    # train = False
+    # # define parameter to explore
+    # lr_mat = np.array([1e-3, 1e-2, 3e-2])
+
+    # total_num_timesteps = 600000
+    # num_periods = total_num_timesteps // 300
+
+
+    # if train:
+    #     for lr in lr_mat:
+    #         print(f"Training networks with lr = {lr}")
+    #         _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
+    #                                     num_networks=num_networks, env=env, w_factor=w_factor,
+    #                                     env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
+    #                                     filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
+    #                                     num_periods=num_periods, seq_len=seq_len, lr=lr)
+
+    # mperf_lists = fa.get_mean_perf_by_param(param='lr', main_folder=main_folder, filename=filename,
+    #                                         param_mat=lr_mat, w_factor=w_factor, mean_ITI=mean_ITI, max_ITI=max_ITI,
+    #                                         fix_dur=fix_dur, dec_dur=dec_dur, blk_dur=blk_dur, probs=probs)
+
+
+    # boxplots for each parameter configuration
     lr_mat = np.array([1e-3, 1e-2, 3e-2])
+    blk_dur_mat = np.array([25, 50, 100])
+    seq_len_mat = np.array([50, 300, 500])
 
-    total_num_timesteps = 600000
-    num_periods = total_num_timesteps // 300
-
-
-    if train:
-        for lr in lr_mat:
-            print(f"Training networks with lr = {lr}")
-            _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=blk_dur,
-                                        num_networks=num_networks, env=env, w_factor=w_factor,
-                                        env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
-                                        filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-                                        num_periods=num_periods, seq_len=seq_len, lr=lr)
-
-    mperf_lists = fa.get_mean_perf_by_param(param='lr', main_folder=main_folder, filename=filename,
-                                            param_mat=lr_mat, w_factor=w_factor, mean_ITI=mean_ITI, max_ITI=max_ITI,
-                                            fix_dur=fix_dur, dec_dur=dec_dur, blk_dur=blk_dur, probs=probs)
-
+    fa.get_mean_perf_by_param_comb(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
+                                   filename=filename)
 
 
 

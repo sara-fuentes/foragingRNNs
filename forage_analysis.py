@@ -19,6 +19,8 @@ import statsmodels.formula.api as smf
 import pandas as pd
 import seaborn as sns
 import glob
+import itertools
+
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -381,31 +383,13 @@ def plot_mean_perf_by_param(mperfs, param):
     print(stats)
 
 
-def get_mean_perf_by_param(param, main_folder, filename, param_mat, w_factor, mean_ITI, max_ITI,
-                           fix_dur, dec_dur, probs, blk_dur=50, seq_len=300,
-                           min_nsteps=300000, plot=True):
+def get_mean_perf_by_param(param, main_folder, filename, param_mat, min_nsteps=300000, plot=True):
     
     df_path = os.path.join(main_folder, filename)
     df = pd.read_csv(df_path)
     
-    if param == 'seq_len':
-        param_str = (f"w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                    f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
-                    f"prb{probs[0]}")
-    
-    if param == 'lr':
-        param_str = (f"w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-            f"d{dec_dur}_nb{np.round(blk_dur, 1)}_"
-            f"prb{probs[0]}_seq_len{seq_len}")
-    
-    # Sect nets according to parameters
-    filtered_df = df[df['params'] == param_str]
-
-    # Filter DataFrame by env_seed and select_folder
-    # filtered_df = df[(df['params'] == param_str)]
-
     # remove rows with sequence length not in param_mat
-    filtered_df = filtered_df[filtered_df[param].isin(param_mat)]
+    filtered_df = df[df[param].isin(param_mat)]
     
     # remove rows with num_periods smaller than 5000
     filtered_df = filtered_df[filtered_df['num_periods']*filtered_df['seq_len'] >= min_nsteps]
@@ -421,7 +405,48 @@ def get_mean_perf_by_param(param, main_folder, filename, param_mat, w_factor, me
         plot_mean_perf_by_param(mperfs=mperfs, param=param)
 
 
-    
+def plot_boxplots_by_param_comb(df, plot_column='performance',
+                                plot_title=None):
+    f, ax = plt.subplots(figsize=(10, 6))
+    sns.boxplot(data=df, x='param_combination', y=plot_column, ax=ax)
+    sns.stripplot(data=df, x='param_combination', y=plot_column, color='black', size=4, ax=ax)
+
+    if plot_title:
+        ax.set_title(plot_title)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+
+def get_mean_perf_by_param_comb(lr_mat, blk_dur_mat, seq_len_mat, main_folder, filename,
+                           min_nsteps=300000, plot=True):
+    df_path = os.path.join(main_folder, filename)
+    df = pd.read_csv(df_path)
+
+    # remove rows with lr not in lr_mat
+    filtered_df = df[df['lr'].isin(lr_mat)]
+    # remove rows with blk_dur not in blk_dur_mat
+    filtered_df = filtered_df[filtered_df['blk_dur'].isin(blk_dur_mat)]
+    # remove rows with seq_len not in seq_len_mat
+    filtered_df = filtered_df[filtered_df['seq_len'].isin(seq_len_mat)]
+
+    # remove rows with num_periods * seq_len smaller than min_nsteps
+    filtered_df = filtered_df[filtered_df['num_periods']*filtered_df['seq_len'] >= min_nsteps]
+
+    # add column called performance showing wether action was equal to gt
+    filtered_df['performance'] = (filtered_df['actions'] == filtered_df['gt']).astype(int)
+
+    # compute average grouping by lr, blk_dur and seq_len using groupby
+    grouped_df = filtered_df.groupby(['lr', 'blk_dur', 'seq_len', 'net_seed'])
+
+    mperfs = grouped_df['performance'].mean().reset_index()
+
+    mperfs['param_combination'] = mperfs['lr'].astype(str) + '_' + mperfs['blk_dur'].astype(str) + '_' + mperfs['seq_len'].astype(str)
+
+
+    if plot:
+        plot_boxplots_by_param_comb(df=mperfs, plot_title='Performance by Parameter Combination')
+
 
 
 # --- MAIN
