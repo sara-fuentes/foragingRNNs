@@ -711,7 +711,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
 
 
 if __name__ == '__main__':
-# define parameters configuration
+    # define parameters configuration
     env_seed = 123
     num_steps_plot = 100
     num_steps_test = 10000
@@ -731,7 +731,6 @@ if __name__ == '__main__':
     else:
         test_flag = ""
 
-    
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
     w_factor = 0.00001
@@ -774,6 +773,13 @@ if __name__ == '__main__':
                                                 num_periods=num_periods, seq_len=seq_len, lr=lr)
 
 
+    # boxplots for each parameter configuration
+    lr_mat = np.array([1e-3, 1e-2, 3e-2])
+    blk_dur_mat = np.array([25, 50, 100])
+    seq_len_mat = np.array([50, 300, 500])
+
+    fa.get_mean_perf_by_param_comb(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
+                                   filename=filename)
 
 
 
