@@ -374,8 +374,12 @@ def train_network(num_periods, criterion, env,
         loss_step = loss.item()
         loss_1st_ep_list.append(loss_step)
         # print loss
-        if i_per % log_per == log_per-1 and data['mean_perf'] > maximum_perf:
-            with open(save_folder + '/training_data.txt', 'w') as f:
+        # TODO: the criterion to save the network should be based on the performance
+        # in a fixed number of trials. Right now, this is not implemented and the number of trials
+        # in which data['mean_perf'] is based depends on the sequence length.
+        if i_per % log_per == log_per-1 and data['mean_perf'] >= maximum_perf:
+            # open and write to file
+            with open(save_folder + '/training_data.txt', 'a') as f:
                 f.write('------------\n')
                 f.write('Period: ' + str(i_per) + ' of ' + str(num_periods) + '\n')
                 f.write('Mean performance: ' + str(data['mean_perf']) + '\n')
@@ -743,7 +747,7 @@ if __name__ == '__main__':
     # define parameter to explore
     lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2])
     blk_dur_mat = np.array([25]) # np.array([25, 50, 100])
-    seq_len_mat = np.array([50]) # np.array([50, 300, 500])
+    seq_len_mat = np.array([100]) # np.array([50, 300, 500])
     total_num_timesteps = 1200000 # 600000
 
     if train:
