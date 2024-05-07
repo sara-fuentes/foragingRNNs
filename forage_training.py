@@ -25,7 +25,6 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
 TASK = 'ForagingBlocks-v0'
-
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
                    'n_epochs': 100,
@@ -343,7 +342,7 @@ def train_network(num_periods, criterion, env,
     error_2_list = []
     error_3_list = []
     log_per = 20
-    minimum_perf = 1e6
+    maximum_perf = 0
     # open txt file to save data
     for i_per in range(num_periods):
         data = run_agent_in_environment(env=env, net=net,
@@ -375,7 +374,7 @@ def train_network(num_periods, criterion, env,
         loss_step = loss.item()
         loss_1st_ep_list.append(loss_step)
         # print loss
-        if i_per % log_per == log_per-1 and data['mean_perf'] < minimum_perf:
+        if i_per % log_per == log_per-1 and data['mean_perf'] > maximum_perf:
             with open(save_folder + '/training_data.txt', 'w') as f:
                 f.write('------------\n')
                 f.write('Period: ' + str(i_per) + ' of ' + str(num_periods) + '\n')
@@ -384,7 +383,7 @@ def train_network(num_periods, criterion, env,
                 f.write('Loss: ' + str(loss_step) + '\n')
             # save net
             torch.save(net, save_folder + '/net.pth')
-            minimum_perf = data['mean_perf']
+            maximum_perf = data['mean_perf']
 
         error_dict = compute_error(data)
         error_no_action_list.append(error_dict['error_no_action'])
@@ -715,7 +714,7 @@ if __name__ == '__main__':
     env_seed = 123
     num_steps_plot = 100
     num_steps_test = 10000
-    num_networks = 20
+    num_networks = 30
     # create folder to save data based on env seed
     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
@@ -726,19 +725,15 @@ if __name__ == '__main__':
     # Prompt the user for input using a pop-up dialog
     experiment_type = simpledialog.askstring("Experiment Type", "Are you running a normal experiment (press Enter) or a test ('test')?")
     # Determine the variable based on user input
-    if experiment_type == "test":
-        test_flag = "test"
-    else:
-        test_flag = ""
-
+    test_flag = experiment_type
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
     w_factor = 0.00001
-    mean_ITI = 200
-    max_ITI = 400
+    mean_ITI = 400
+    max_ITI = 800
     fix_dur = 100
     dec_dur = 100
-    probs = np.array([0.1, 0.9])
+    probs = np.array([0.2, 0.8])
     # create folder to save data based on parameters
     save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_"f"prb{probs[0]}")
@@ -746,10 +741,10 @@ if __name__ == '__main__':
 
     train = True
     # define parameter to explore
-    lr_mat = np.array([1e-3, 1e-2, 3e-2])
-    blk_dur_mat = np.array([25, 50, 100])
-    seq_len_mat = np.array([50, 300, 500])
-    total_num_timesteps = 600000
+    lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2])
+    blk_dur_mat = np.array([25]) # np.array([25, 50, 100])
+    seq_len_mat = np.array([50]) # np.array([50, 300, 500])
+    total_num_timesteps = 1200000 # 600000
 
     if train:
         for bd in blk_dur_mat:
@@ -764,8 +759,6 @@ if __name__ == '__main__':
             for seq_len in seq_len_mat:
                 num_periods = total_num_timesteps // seq_len
                 for lr in lr_mat:
-                    if (bd == 50 and lr == 1e-2) or (bd == 50 and seq_len == 300):
-                        pass
                     _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=bd,
                                                 num_networks=num_networks, env=env, w_factor=w_factor,
                                                 env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
