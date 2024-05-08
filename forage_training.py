@@ -38,7 +38,7 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
     Create an environment with the specified parameters.
     """
     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
-                'blk_dur': blk_dur, 'timing':
+                  'blk_dur': blk_dur, 'timing':
                     {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
                         # mean, min, max
                         'fixation': fix_dur, 'decision': dec_dur},
@@ -51,6 +51,8 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
     # set seed
     env.seed(env_seed)
     env.reset()
+    # store mean ITI in env_kwargs
+    env_kwargs['mean_ITI'] = mean_ITI
     return env_kwargs, env
 
 class Net(nn.Module):
@@ -320,9 +322,8 @@ def dict2df(data):
     return df
 
 
-def train_network(num_periods, criterion, env,
-                  net_kwargs, env_kwargs, seq_len, debug=False, seed=0,
-                  save_folder=None):
+def train_network(num_periods, criterion, env, net_kwargs, env_kwargs,
+                  seq_len, debug=False, seed=0, save_folder=None, num_trials_perf=100):
     """
     """
     net = Net(input_size=net_kwargs['input_size'],
@@ -342,6 +343,16 @@ def train_network(num_periods, criterion, env,
     error_2_list = []
     error_3_list = []
     log_per = 20
+    # compute mean trial duration
+    mean_trial_dur =\
+          (env_kwargs['mean_ITI']+env_kwargs['timing']['fixation']+env_kwargs['timing']['decision'])/env_kwargs['dt']
+    # mean number of trials per episode
+    num_trials_per_ep = seq_len//mean_trial_dur
+    # number of episodes to compute performance
+    num_eps_perf = num_trials_perf//num_trials_per_ep
+    # mean performance across episodes
+    temp_mean_perf = []
+    # maximum performance to save the network
     maximum_perf = 0
     # open txt file to save data
     for i_per in range(num_periods):
@@ -373,11 +384,11 @@ def train_network(num_periods, criterion, env,
         optimizer.step()
         loss_step = loss.item()
         loss_1st_ep_list.append(loss_step)
-        # print loss
-        # TODO: the criterion to save the network should be based on the performance
-        # in a fixed number of trials. Right now, this is not implemented and the number of trials
-        # in which data['mean_perf'] is based depends on the sequence length.
-        if i_per % log_per == log_per-1 and data['mean_perf'] >= maximum_perf:
+        # compute performance for the last num_eps_perf episodes
+        temp_mean_perf.append(data['mean_perf'])
+        if len(temp_mean_perf) > num_eps_perf:
+            temp_mean_perf.pop(0)
+        if i_per % log_per == log_per-1 and np.mean(temp_mean_perf) >= maximum_perf:
             # open and write to file
             with open(save_folder + '/training_data.txt', 'a') as f:
                 f.write('------------\n')
@@ -387,7 +398,7 @@ def train_network(num_periods, criterion, env,
                 f.write('Loss: ' + str(loss_step) + '\n')
             # save net
             torch.save(net, save_folder + '/net.pth')
-            maximum_perf = data['mean_perf']
+            maximum_perf = np.mean(temp_mean_perf)
 
         error_dict = compute_error(data)
         error_no_action_list.append(error_dict['error_no_action'])
