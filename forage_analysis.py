@@ -448,6 +448,56 @@ def get_mean_perf_by_param_comb(lr_mat, blk_dur_mat, seq_len_mat, main_folder, f
         plot_boxplots_by_param_comb(df=mperfs, plot_title='Performance by Parameter Combination')
 
 
+def get_perf_by_param_comb_all_nets(lr_mat, blk_dur_mat, seq_len_mat, main_folder, filename,
+                           min_nsteps=300000, plot=True):
+    
+    df_path = os.path.join(main_folder, filename)
+    df = pd.read_csv(df_path)
+
+    # remove rows with lr not in lr_mat
+    filtered_df = df[df['lr'].isin(lr_mat)]
+    # remove rows with blk_dur not in blk_dur_mat
+    filtered_df = filtered_df[filtered_df['blk_dur'].isin(blk_dur_mat)]
+    # remove rows with seq_len not in seq_len_mat
+    filtered_df = filtered_df[filtered_df['seq_len'].isin(seq_len_mat)]
+
+    # remove rows with num_periods * seq_len smaller than min_nsteps
+    filtered_df = filtered_df[filtered_df['num_periods']*filtered_df['seq_len'] >= min_nsteps]
+
+    # add column called performance showing wether action was equal to gt
+    filtered_df['performance'] = (filtered_df['actions'] == filtered_df['gt']).astype(int)
+
+    # compute average grouping by lr, blk_dur and seq_len using groupby
+    grouped_df = filtered_df.groupby(['lr', 'blk_dur', 'seq_len'])
+
+    mperfs = grouped_df['performance'].mean().reset_index()
+
+
+    if plot:
+        plot_perf_heatmaps(df=mperfs, blk_dur_mat=blk_dur_mat)
+    
+
+def plot_perf_heatmaps(df, blk_dur_mat):
+    # Plot heatmap for each blk_dur
+    f, ax = plt.subplots(1, len(blk_dur_mat), figsize=(15, 5))
+
+    for i, blk_dur in enumerate(blk_dur_mat):
+        df_blk_dur = df[df['blk_dur'] == blk_dur]
+        pivot_df_blk_dur = df_blk_dur.pivot(index='lr', columns='seq_len', values='performance')
+        sns.heatmap(pivot_df_blk_dur, annot=True, fmt=".2f", cmap='viridis', ax=ax[i])
+        ax[i].set_title(f'Performance for blk_dur = {blk_dur}')
+        ax[i].set_xlabel('Sequence Length')
+        ax[i].set_ylabel('Learning Rate')
+
+          # Annotate each cell with the performance value
+        for j, lr in enumerate(pivot_df_blk_dur.index):
+            for k, seq_len in enumerate(pivot_df_blk_dur.columns):
+                perf = pivot_df_blk_dur.loc[lr, seq_len]
+                ax[i].text(k + 0.5, j + 0.5, f'{perf:.2f}', ha='center', va='center', color='gray')
+    plt.tight_layout()
+    plt.show()
+
+
 
 # --- MAIN
 if __name__ == '__main__':
