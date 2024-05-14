@@ -781,15 +781,18 @@ if __name__ == '__main__':
                                                 filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
                                                 num_periods=num_periods, seq_len=seq_len, lr=lr)
 
+    filename ='training_data_bias_corrected_th04.csv'
 
     # boxplots for each parameter configuration
-    lr_mat = np.array([1e-3, 1e-2, 3e-2])
-    blk_dur_mat = np.array([25, 50, 100])
-    seq_len_mat = np.array([50, 300, 500])
+    lr_mat =  np.array([1e-3, 1e-2,]) # np.array([1e-3, 1e-2, 3e-2])
+    blk_dur_mat = np.array([25])  # np.array([25, 50, 100])
+    seq_len_mat =  np.array([50, 300]) # np.array([50, 300, 500])
 
     fa.get_mean_perf_by_param_comb(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
                                    filename=filename)
 
+    fa.get_perf_by_param_comb_all_nets(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
+                                       filename=filename)
 
 
 # --- MAIN
