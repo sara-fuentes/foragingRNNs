@@ -4,9 +4,10 @@ import seaborn as sns
 import pandas as pd
 main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/'
 # load dataframe training_data.csv
-folder = main_folder+'w1e-05_mITI400_xITI800_f100_d100_prb0.2'
-# folder = main_folder+'w1e-05_mITI200_xITI400_f100_d100_prb0.1'
-for exp in ['_mITI_400_pr_0208']: # , '_bias_corrected_th04']:  # , 'long_ITI_0208']:
+folder = main_folder+'w0.01_mITI400_xITI800_f100_d100_prb0.2'
+# folder = main_folder+'w1e-05_mITI400_xITI800_f100_d100_prb0.2' # associated to '_mITI_400_pr_0208'
+# folder = main_folder+'w1e-05_mITI200_xITI400_f100_d100_prb0.1' # associated to ''
+for exp in ['_w1e-02']: # , '_bias_corrected_th04']:  # , 'long_ITI_0208']:
     df = pd.read_csv(main_folder+'/training_data'+exp+'.csv')
     # get list of net seeds from df
     net_seeds = df['net_seed'].unique()

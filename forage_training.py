@@ -260,7 +260,7 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     None.
 
     """
-    f, ax = plt.subplots(ncols=1, nrows=4, figsize=(8, 4),
+    f, ax = plt.subplots(ncols=1, nrows=4, figsize=(6, 3),
                          dpi=150, sharex=True)
 
     ax[0].plot(np.arange(1, num_steps+1)*env_kwargs['dt'],
@@ -290,6 +290,7 @@ def plot_task(env_kwargs, data, num_steps, save_folder=None):
     plt.tight_layout()
     if save_folder is not None:
         plt.savefig(save_folder + '/task.png')
+        plt.savefig(save_folder + '/task.svg')
         plt.close(f)
 
 
@@ -743,7 +744,7 @@ if __name__ == '__main__':
     test_flag = experiment_type
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
-    w_factor = 0.00001
+    w_factor = 0.01 # 0.00001
     mean_ITI = 400
     max_ITI = 800
     fix_dur = 100
