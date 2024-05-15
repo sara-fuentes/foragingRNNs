@@ -100,6 +100,9 @@ def GLM(df):
     try:
         # "variable" and "regressors" are columnames of dataframe
         # Apply glm
+        # add iti as a regressor
+        regr_plus += 'iti'
+        # introduce an interaction between iti and regressors
         mM_logit = smf.logit(formula='actions ~ ' + regr_plus + regr_minus,
                             data=df_glm).fit()
 
@@ -122,15 +125,15 @@ def GLM(df):
         return None
 
 
-def plot_GLM(ax, GLM_df):
+def plot_GLM(ax, GLM_df, alpha=1):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
     # intercept = GLM_df.loc['Intercept', "coefficient"]
-    ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred')
-    ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal')
+    ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
+    ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
 
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
@@ -239,26 +242,52 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
               'meanperformance of {mean_perf}')
 
         if mean_perf > PERF_THRESHOLD:
-            iti_mat = np.array(data['iti'])
-            iti_list = np.unique(iti_mat)
-            mean_performance = []
-            for iti in iti_list:
-                mean_performance.append(np.mean(perf[iti_mat == iti]))
-            mean_perf_iti.append(mean_performance)
             df = ft.dict2df(data)
             GLM_df = GLM(df)
             if GLM_df is not None:
+                GLM_df['iti'] = -1
                 # add column with network number
                 GLM_df['seed'] = ns
                 GLM_coeffs = pd.concat([GLM_coeffs, GLM_df], axis=0)
-            if verbose:
-                ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
-                             save_folder=save_folder_net)
-                if GLM_df is not None:
+                if verbose:
                     f, ax_ind = plt.subplots(1, 1, figsize=(10, 6))
                     plot_GLM(ax=ax_ind, GLM_df=GLM_df)
                     f.savefig(save_folder_net + '/GLM_weights.png')
                     plt.close(f)
+
+            iti_mat = np.array(data['iti'])
+            iti_list = np.unique(iti_mat)
+            # create bins for iti: 1-2, 3-4, 5-7
+            iti_list = np.array([1, 3, 5, 7])
+            # check that no iti is smaller than 1 and larger than 7
+            # TODO: check ITIs
+            assert np.all(iti_list >= 1) and np.all(iti_list <= 7)
+            mean_performance = []
+            if verbose:
+                f, ax_ind = plt.subplots(1, 1, figsize=(10, 6))
+            for iti in range(len(iti_list)-1):
+                # get itis in corresponding bin
+                i_iti = iti_list[iti] <= iti_mat < iti_list[iti+1]
+                mean_performance.append(np.mean(perf[i_iti]))
+                # filter df by iti
+                GLM_df = GLM(df.loc[i_iti])
+                if GLM_df is not None:
+                    GLM_df['iti'] = (iti_list[iti]+iti_list[iti+1])/2
+                    # add column with network number
+                    GLM_df['seed'] = ns
+                    GLM_coeffs = pd.concat([GLM_coeffs, GLM_df], axis=0)
+                    if verbose:
+                        plot_GLM(ax=ax_ind, GLM_df=GLM_df, alpha=1/iti_list[iti])
+            if verbose:
+                # TODO: check that this figure makes sense (it is saved in each network folder)
+                f.savefig(save_folder_net + '/GLM_weights_itis.png')
+                plt.close(f)
+            # TODO: check plot for this figure
+            mean_perf_iti.append(mean_performance)
+                      
+            if verbose:
+                ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
+                             save_folder=save_folder_net)
 
     return net_seeds, mean_perf_list, mean_perf_smooth_list, iti_list, \
         mean_perf_iti, GLM_coeffs, net_nums
@@ -281,6 +310,7 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     plot_hist_mean_perf(ax=ax[0], perfs=mean_perf)
     # plot GLM and task behavior
     # get seeds from df
+    # TODO: conditioned to iti == -1
     seeds = GLM_coeffs['seed'].unique()
     for s in seeds:
         # get all rows with seed s
@@ -292,6 +322,8 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     ax[1].set_ylabel('GLM weight')
     ax[1].set_xlabel('Previous trials')
     ax[1].legend(loc='best')
+    # TODO: plotting will not work because iti_list has 4 elements and mp has 3
+    # TODO: try to normalize by first element
     for mp in mean_perf_iti:
         ax[2].plot(iti_list, mp, color='lightgray')
     mp_arr = np.array(mean_perf_iti)
@@ -509,7 +541,8 @@ if __name__ == '__main__':
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    main_folder = '/home/manuel/foragingRNNs/files/'
     # Set up the task
     w_factor = 0.01
     mean_ITI = 400
@@ -548,6 +581,8 @@ if __name__ == '__main__':
             mean_perf_iti, GLM_coeffs, net_nums = \
     general_analysis(load_folder=folder, file=filename, env=env, take_best=True, num_steps_exp=50000,
                      verbose=True)
+    # filter GLM_coeffs by iti == -1
+    GLM_coeffs = GLM_coeffs[GLM_coeffs['iti'] == -1]
     plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_list, GLM_coeffs=GLM_coeffs,
                           mean_perf=mean_perf_list, iti_list=iti_list, mean_perf_iti=mean_perf_iti,
                           sv_folder=folder, take_best=True, seeds=seeds)
