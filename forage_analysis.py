@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Feb  8 22:20:23 2024
 
@@ -148,6 +147,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
     ax.set_xlabel('Previous trials')
 
 
+
 def load_net(save_folder, performance, take_best=True):
     # check if net.pth exists in the folder (for nets that have not been saved
     # several times during training)
@@ -290,12 +290,12 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
                 ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=100,
                              save_folder=save_folder_net)
 
-    return net_seeds, mean_perf_list, mean_perf_smooth_list, iti_list, \
+    return net_seeds, mean_perf_list, mean_perf_smooth_list, \
         iti_bins, mean_perf_iti, GLM_coeffs, net_nums
 
 
 def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
-                          iti_list, mean_perf_iti, sv_folder,
+                          iti_bins, mean_perf_iti, sv_folder,
                           take_best, seeds):
     # Constants
     PERF_THRESHOLD = 0.5  # Assuming a threshold value
@@ -315,28 +315,43 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     # plot GLM and task behavior
     # get seeds from df
     # TODO: conditioned to iti == -1
-    seeds = GLM_coeffs['seed'].unique()
+    GLM_coeffs_all_itis = GLM_coeffs[GLM_coeffs['iti'] == -1]
+    seeds = GLM_coeffs_all_itis['seed'].unique()
     for s in seeds:
         # get all rows with seed s
-        i = GLM_coeffs['seed'] == s
-        GLM_df = GLM_coeffs.loc[i]
+        i = GLM_coeffs_all_itis['seed'] == s
+        GLM_df = GLM_coeffs_all_itis.loc[i]
         plot_GLM(ax=ax[1], GLM_df=GLM_df, alpha=0.5)
 
     ax[1].axhline(y=0, color='gray', linestyle='--')
     ax[1].set_ylabel('GLM weight')
     ax[1].set_xlabel('Previous trials')
     ax[1].legend(loc='best')
-    # TODO: plotting will not work because iti_list has 4 elements and mp has 3
-    # TODO: try to normalize by first element
+    ax[1].set_ylim(-50, 50)
+
+    # Exclude iti == -1 from the DataFrame
+    filtered_GLM_coeffs = GLM_coeffs[GLM_coeffs['iti'] != -1]
     
+    # Group the DataFrame by 'iti' and compute the mean for each r_plus and r_minus
+    grouped_iti = filtered_GLM_coeffs.groupby('iti')
+    
+    for iti, group_df in grouped_iti:
+        # Compute the mean for each column while keeping the structure
+        mean_df = group_df.groupby(group_df.index).mean()
+        sem_df = group_df.groupby(group_df.index).sem() # calculate the standard error of the mean
+    
+        # Plot GLM coefficients for the current ITI group
+        plot_GLM_means(ax=ax[3], GLM_df=mean_df, sem_df = sem_df, alpha= 1 / (1 + np.exp(-(iti - 1))))
+    
+    ax[3].legend(loc='best')
+
     # Normalize by the first element
-    first_element = mean_perf_iti[0][0]
-    normalized_mean_perf_iti = [mp / first_element for mp in mean_perf_iti]
+    normalized_mean_perf_iti = [mp / mp[0] for mp in mean_perf_iti]
 
     for mp in normalized_mean_perf_iti:
-        ax[2].plot(iti_list, mp, color='lightgray')
+        ax[2].plot(iti_bins, mp, color='lightgray')
     mp_arr = np.array(normalized_mean_perf_iti)
-    ax[2].plot(iti_list, np.mean(mp_arr, axis=0),
+    ax[2].plot(iti_bins, np.mean(mp_arr, axis=0),
                linewidth=2, color='black', label='mean')
     ax[2].legend()
     ax[2].set_xlabel('ITI')
@@ -396,7 +411,6 @@ def test_networks(folder, file, env, take_best, verbose=False,
 def plot_mean_perf_by_param(mperfs, param):
     # boxplot of mean performance by sequence length
     sns.set(style="whitegrid")
-
     # Create a line plot
     plt.figure(figsize=(10, 6))  # You can adjust the size of the figure
     sns.violinplot(data=mperfs, x=param, y='performance', cut=0)
@@ -542,6 +556,35 @@ def bin_mean(iti_bins):
     # Calculate the mean along the second axis
     return np.mean(bin_pairs, axis=1)
 
+# Define the function to plot GLM coefficients for every ITI
+def plot_GLM_means(ax, GLM_df, sem_df, alpha=1):
+    # Filter the DataFrame to separate the coefficients
+    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
+    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+
+     # Get the standard errors
+    r_plus_err = sem_df.loc[sem_df.index.str.contains('r_plus'), "coefficient"]
+    r_minus_err = sem_df.loc[sem_df.index.str.contains('r_minus'), "coefficient"]
+
+    # Get the orders for plotting
+    orders = np.arange(len(r_plus))
+
+    # Plot the mean coefficients with error bars
+    ax.errorbar(orders, r_plus, yerr= r_plus_err, marker='o', color='indianred', alpha=alpha, label='r+')
+    ax.errorbar(orders, r_minus, yerr= r_minus_err, marker='o', color='teal', alpha=alpha, label='r-')
+
+    # Create custom legend handles with labels and corresponding colors
+    legend_handles = [
+        mpatches.Patch(color='indianred', label='r+'),
+        mpatches.Patch(color='teal', label='r-')
+    ]
+
+    # Add legend with custom handles
+    ax.legend(handles=legend_handles)
+    ax.axhline(y=0, color='gray', linestyle='--')
+    ax.set_ylabel('GLM weight')
+    ax.set_xlabel('Previous trials')
+
 # --- MAIN
 if __name__ == '__main__':
 # define parameters configuration
@@ -590,16 +633,17 @@ if __name__ == '__main__':
     folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_prb{probs[0]}")
     filename = main_folder+'/training_data_w1e-02.csv'
-    seeds, mean_perf_list, mean_perf_smooth_list, iti_list, \
+    
+    seeds, mean_perf_list, mean_perf_smooth_list, \
             iti_bins, mean_perf_iti, GLM_coeffs, net_nums = \
     general_analysis(load_folder=folder, file=filename, env=env, take_best=True, num_steps_exp=50000,
                      verbose=True)
-    # filter GLM_coeffs by iti == -1
-    GLM_coeffs = GLM_coeffs[GLM_coeffs['iti'] == -1]
+
     bin_mean_list = bin_mean(iti_bins)
     plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_list, GLM_coeffs=GLM_coeffs,
-                          mean_perf=mean_perf_list, iti_list=bin_mean_list, mean_perf_iti=mean_perf_iti,
+                          mean_perf=mean_perf_list, iti_bins=bin_mean_list, mean_perf_iti=mean_perf_iti,
                           sv_folder=folder, take_best=True, seeds=seeds)
+    
     # # Save config as npz
     # np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
 
