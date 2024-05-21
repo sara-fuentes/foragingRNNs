@@ -19,6 +19,7 @@ import pandas as pd
 import seaborn as sns
 import glob
 import itertools
+import pickle
 
 # check if GPU is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -300,66 +301,108 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     # Constants
     PERF_THRESHOLD = 0.5  # Assuming a threshold value
 
-    # check if figure exists
+    # Ensure the save folder exists
+    if not os.path.exists(sv_folder):
+        os.makedirs(sv_folder)
+
+    # Check if training performance figure exists
     if not os.path.exists(sv_folder + '/training_performance.png'):
         f, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5))
-        # plot mean performance
+        # Plot mean performance
         for perf in mean_perf_smooth_list:
             plot_mean_perf(ax=ax, mean_performance_smooth=perf)
         ax.axhline(y=PERF_THRESHOLD, color='gray', linestyle='--')
         f.savefig(sv_folder + '/training_performance.png')
+        plt.close(f)
     
-    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(6, 4))
+    # Create the main figure with subplots
+    f, ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 6))
     ax = ax.flatten()
+    
+    # Plot histogram of mean performance
     plot_hist_mean_perf(ax=ax[0], perfs=mean_perf)
-    # plot GLM and task behavior
-    # get seeds from df
-    # TODO: conditioned to iti == -1
+    # Save individual subplot
+    fig0 = plt.figure(figsize=(4, 3))
+    ax0 = fig0.add_subplot(111)
+    plot_hist_mean_perf(ax=ax0, perfs=mean_perf)
+    fig0.savefig(sv_folder + '/hist_mean_perf.png')
+    plt.close(fig0)
+    
+    # Plot GLM and task behavior
     GLM_coeffs_all_itis = GLM_coeffs[GLM_coeffs['iti'] == -1]
     seeds = GLM_coeffs_all_itis['seed'].unique()
     for s in seeds:
-        # get all rows with seed s
         i = GLM_coeffs_all_itis['seed'] == s
         GLM_df = GLM_coeffs_all_itis.loc[i]
+        if any(GLM_df['coefficient'] > 50):
+            continue
         plot_GLM(ax=ax[1], GLM_df=GLM_df, alpha=0.5)
-
     ax[1].axhline(y=0, color='gray', linestyle='--')
     ax[1].set_ylabel('GLM weight')
     ax[1].set_xlabel('Previous trials')
     ax[1].legend(loc='best')
-    ax[1].set_ylim(-50, 50)
+    # Save individual subplot
+    fig1 = plt.figure(figsize=(4, 3))
+    ax1 = fig1.add_subplot(111)
+    for s in seeds:
+        i = GLM_coeffs_all_itis['seed'] == s
+        GLM_df = GLM_coeffs_all_itis.loc[i]
+        if any(GLM_df['coefficient'] > 50):
+            continue
+        plot_GLM(ax=ax1, GLM_df=GLM_df, alpha=0.5)
+    ax1.axhline(y=0, color='gray', linestyle='--')
+    ax1.set_ylabel('GLM weight')
+    ax1.set_xlabel('Previous trials')
+    ax1.legend(loc='best')
+    fig1.savefig(sv_folder + '/GLM_task_behavior.png')
+    plt.close(fig1)
 
-    # Exclude iti == -1 from the DataFrame
+    # Plot GLM means for different ITIs
     filtered_GLM_coeffs = GLM_coeffs[GLM_coeffs['iti'] != -1]
-    
-    # Group the DataFrame by 'iti' and compute the mean for each r_plus and r_minus
     grouped_iti = filtered_GLM_coeffs.groupby('iti')
-    
     for iti, group_df in grouped_iti:
-        # Compute the mean for each column while keeping the structure
         mean_df = group_df.groupby(group_df.index).mean()
-        sem_df = group_df.groupby(group_df.index).sem() # calculate the standard error of the mean
-    
-        # Plot GLM coefficients for the current ITI group
-        plot_GLM_means(ax=ax[3], GLM_df=mean_df, sem_df = sem_df, alpha= 1 / (1 + np.exp(-(iti - 1))))
-    
+        sem_df = group_df.groupby(group_df.index).sem()
+        plot_GLM_means(ax=ax[3], GLM_df=mean_df, sem_df=sem_df, alpha=1 / (1 + np.exp(-(iti - 1))))
     ax[3].legend(loc='best')
+    # Save individual subplot
+    fig3 = plt.figure(figsize=(4, 3))
+    ax3 = fig3.add_subplot(111)
+    for iti, group_df in grouped_iti:
+        mean_df = group_df.groupby(group_df.index).mean()
+        sem_df = group_df.groupby(group_df.index).sem()
+        plot_GLM_means(ax=ax3, GLM_df=mean_df, sem_df=sem_df, alpha=1 / (1 + np.exp(-(iti - 1))))
+    ax3.legend(loc='best')
+    fig3.savefig(sv_folder + '/GLM_means_ITI.png')
+    plt.close(fig3)
 
-    # Normalize by the first element
+    # Plot normalized performance by ITI
     normalized_mean_perf_iti = [mp / mp[0] for mp in mean_perf_iti]
-
     for mp in normalized_mean_perf_iti:
         ax[2].plot(iti_bins, mp, color='lightgray')
     mp_arr = np.array(normalized_mean_perf_iti)
-    ax[2].plot(iti_bins, np.mean(mp_arr, axis=0),
-               linewidth=2, color='black', label='mean')
+    ax[2].plot(iti_bins, np.mean(mp_arr, axis=0), linewidth=2, color='black', label='mean')
     ax[2].legend()
     ax[2].set_xlabel('ITI')
     ax[2].set_ylabel('Performance')
+    # Save individual subplot
+    fig2 = plt.figure(figsize=(4, 3))
+    ax2 = fig2.add_subplot(111)
+    for mp in normalized_mean_perf_iti:
+        ax2.plot(iti_bins, mp, color='lightgray')
+    mp_arr = np.array(normalized_mean_perf_iti)
+    ax2.plot(iti_bins, np.mean(mp_arr, axis=0), linewidth=2, color='black', label='mean')
+    ax2.legend()
+    ax2.set_xlabel('ITI')
+    ax2.set_ylabel('Performance')
+    fig2.savefig(sv_folder + '/performance_by_ITI.png')
+    plt.close(fig2)
+    
+    # Save the entire figure with all subplots
     f.savefig(sv_folder + '/performance_bests'+str(take_best)+'.svg')
     f.savefig(sv_folder + '/performance_bests'+str(take_best)+'.png')
-    plt.show()
 
+    plt.show()
 
 def test_networks(folder, file, env, take_best, verbose=False,
                   num_steps_tests=50000, env_seed='123'):
@@ -585,6 +628,23 @@ def plot_GLM_means(ax, GLM_df, sem_df, alpha=1):
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
 
+def save_general_analysis_results(sv_folder, seeds, mean_perf_list, mean_perf_smooth_list, iti_bins, mean_perf_iti, GLM_coeffs, net_nums):
+    with open(f'{sv_folder}/analysis_results.pkl', 'wb') as f:
+        pickle.dump({
+            'seeds': seeds,
+            'mean_perf_list': mean_perf_list,
+            'mean_perf_smooth_list': mean_perf_smooth_list,
+            'iti_bins': iti_bins,
+            'mean_perf_iti': mean_perf_iti,
+            'GLM_coeffs': GLM_coeffs,
+            'net_nums': net_nums
+        }, f)
+
+def load_analysis_results(folder):
+    with open(f'{folder}/analysis_results.pkl', 'rb') as f:
+        data = pickle.load(f)
+    return data['seeds'], data['mean_perf_list'], data['mean_perf_smooth_list'], data['iti_bins'], data['mean_perf_iti'], data['GLM_coeffs'], data['net_nums']
+
 # --- MAIN
 if __name__ == '__main__':
 # define parameters configuration
@@ -634,10 +694,19 @@ if __name__ == '__main__':
                     f"d{dec_dur}_prb{probs[0]}")
     filename = main_folder+'/training_data_w1e-02.csv'
     
-    seeds, mean_perf_list, mean_perf_smooth_list, \
-            iti_bins, mean_perf_iti, GLM_coeffs, net_nums = \
-    general_analysis(load_folder=folder, file=filename, env=env, take_best=True, num_steps_exp=50000,
-                     verbose=True)
+    # Check if analysis_results.pkl exists in the main folder
+    if not os.path.exists(f'{folder}/analysis_results.pkl'):
+        seeds, mean_perf_list, mean_perf_smooth_list, \
+                iti_bins, mean_perf_iti, GLM_coeffs, net_nums = \
+        general_analysis(load_folder=folder, file=filename, env=env, take_best=True, num_steps_exp=50000,
+                        verbose=True)
+        # TODO: move inside general_analysis
+        save_general_analysis_results(sv_folder=folder, seeds=seeds, mean_perf_list=mean_perf_list,
+                                    mean_perf_smooth_list=mean_perf_smooth_list, iti_bins=iti_bins, 
+                                    mean_perf_iti=mean_perf_iti, GLM_coeffs=GLM_coeffs, net_nums=net_nums)
+    
+    # Load the results
+    seeds, mean_perf_list, mean_perf_smooth_list, iti_bins, mean_perf_iti, GLM_coeffs, net_nums = load_analysis_results(folder=folder)
 
     bin_mean_list = bin_mean(iti_bins)
     plot_general_analysis(mean_perf_smooth_list=mean_perf_smooth_list, GLM_coeffs=GLM_coeffs,

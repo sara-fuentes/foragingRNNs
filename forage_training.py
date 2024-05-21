@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Feb  8 22:20:23 2024
 
@@ -785,7 +784,6 @@ if __name__ == '__main__':
 
     # boxplots for each parameter configuration
     lr_mat =  np.array([1e-3, 1e-2,]) # np.array([1e-3, 1e-2, 3e-2])
-    blk_dur_mat = np.array([25])  # np.array([25, 50, 100])
     seq_len_mat =  np.array([50, 300]) # np.array([50, 300, 500])
 
     fa.get_mean_perf_by_param_comb(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
