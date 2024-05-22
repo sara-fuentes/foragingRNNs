@@ -13,62 +13,18 @@ import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
 
-def get_regressors(df):
+def get_regressors(df, num_trial_back=10, iti=None):
     # latencies & times
     df['day'] = pd.to_datetime(df['date']).dt.date
-    # df['center_response_time'] = df['STATE_center_light_END'] - df['STATE_center_light_START']
-    # df['response_time'] = df['STATE_side_light_END'] - df['STATE_side_light_START']
-    # df['duration_drink_delay'] = df['STATE_drink_delay_END'] - df['STATE_drink_delay_START']
-    # df['centre_response_latency'] = df['center_response_time']
-    # df['Port5In_START'] = df['Port5In_START'].astype(str)
-    # df['Port2In_START'] = df['Port2In_START'].astype(str)
-    # df['first_response_right'] = df['Port5In_START'].str.split(',').str[0].astype(float)
-    # df['first_response_left'] = df['Port2In_START'].str.split(',').str[0].astype(float)
-    # df['center_median_response_time'] = df['centre_response_latency'].median()  # median latency to first response
-    # df['response_latency_median'] = df['response_time'].median()  # median latency to first response
-    # df['probability_r'] = np.round(df['probability_r'], 1)
-
-    # # teat well the NANs and  List of conditions for knowing which one was the first choice in each trial
-    # df = df.replace(np.nan, 0)
-
-    # # List of conditions for teat well the NANs
-    # conditions = [
-    #     (df.first_response_left == 0) & (df.first_response_right == 0),
-    #     df.first_response_left == 0,
-    #     df.first_response_right == 0,
-    #     df.first_response_left <= df.first_response_right,
-    #     df.first_response_left > df.first_response_right,
-    # ]
-    # choices = ["no_response",
-    #            "right",
-    #            "left",
-    #            "left",
-    #            "right"]
-    # df["first_trial_response"] = np.select(conditions, choices)
-
-    # df["correct_outcome_bool"] = df["first_trial_response"] == df["side"]
-    # df["correct_outcome_int"] = np.where(df["first_trial_response"] == df["side"], 1,
-    #                                      0)  # (1 = correct choice, 0= incorrect side)
-
-    return df
-
-
-if __name__ == '__main__':
-    # TODO:
-    # 1. Move part of code to get_regressors
-    # 1.1. Generalize code for mice using the code for RNNs
-    # 2. Compute GLM conditioning on mouse (there are 3 mice in the dataset)
-    # 3. Introduce ITI as a regressor
-    data_folder= '/home/molano/Dropbox/Molabo/foragingRNNs/mice/'
-    filename ='global_trials_100524.csv'
-    df = pd.read_csv(str(data_folder) + str(filename), sep=';', low_memory=False)
-    df = get_regressors(df)
-    # Prepare df columns
-    # Converting the 'outcome' column to boolean values
+  # Prepare df columns
     select_columns = ['session', 'outcome', 'side', 'iti_duration']  # Usa una lista per i nomi delle colonne
     # print columns
     print(df.columns)
     df_glm = df.loc[:, select_columns].copy()
+    if iti is not None:
+        indx_iti = (df_glm['iti_duration'] >= iti[0]) & (df_glm['iti_duration'] <= iti[1])
+        # get all trials between iti[0] and iti[1]
+        df_glm = df_glm.loc[indx_iti]
 
     df_glm['outcome_bool'] = np.where(df_glm['outcome'] == "correct", 1, 0)
 
@@ -116,9 +72,6 @@ if __name__ == '__main__':
     df_glm['r_plus'] = pd.to_numeric(df_glm['r_plus'], errors='coerce')
 
     # calculate wrong_choice regressor L- (1 correct R, -1 correct L, 0 incorrect)
-    # if outcome_bool 1,  L-: correct (0)
-    # if outcome_bool 0 & choice "right", L-: incorrect (1) because right,
-    # if outcome bool 0 & choice "left", L-: incorrect (-1) because left,
 
     # define conditions
     conditions = [
@@ -150,25 +103,60 @@ if __name__ == '__main__':
     df_glm['choice_num'] = np.select(conditions, choice_num, default='other')
     # TODO: use code for RNNs here
     # Creating columns for previous trial results (both dfs)
-    for i in range(1, 21):
+    regr_plus = ''
+    regr_minus = ''
+    for i in range(1, num_trial_back + 1):
         df_glm[f'r_plus_{i}'] = df_glm.groupby('session')['r_plus'].shift(i)
         df_glm[f'r_minus_{i}'] = df_glm.groupby('session')['r_minus'].shift(i)
+        regr_plus += f'r_plus_{i} + '
+        regr_minus += f'r_minus_{i} + '
+    regressors = regr_plus + regr_minus[:-3]
 
     df_glm['choice_num'] = pd.to_numeric(df_glm['choice_num'], errors='coerce')
+
+    return df_glm, regressors
+
+
+
+if __name__ == '__main__':
+    num_bins_iti = 3
+    # TODO:
+    # 1. Move part of code to get_regressors
+    # 1.1. Generalize code for mice using the code for RNNs
+    # 2. Compute GLM conditioning on mouse (there are 3 mice in the dataset)
+    # 3. Introduce ITI as a regressor
+    data_folder= '/home/molano/Dropbox/Molabo/foragingRNNs/mice/'
+    filename ='global_trials_100524.csv'
+    df = pd.read_csv(str(data_folder) + str(filename), sep=';', low_memory=False)
+    # get only trials with iti
+    df = df[df['task'] != 'S4'] # quita las sessiones sin ITI
+    df = df[df['subject'] != 'manual'] #
+    for mice in df.subject.unique():
+        print(mice)
+        df_mice = df.loc[df['subject'] == mice]
+        # get 3 equipopulated bins of iti values
+        df_mice['iti_bins'], bins_iti = pd.qcut(df_mice['iti_duration'], num_bins_iti, labels=False, retbins=True)
+        for iti_index in range(num_bins_iti):
+            iti = [bins_iti[iti_index], bins_iti[iti_index + 1]]
+            df_mice, regressors = get_regressors(df_mice, iti=iti)
+            mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df_mice).fit()
+            GLM_df = pd.DataFrame({
+                'coefficient': mM_logit.params,
+                'std_err': mM_logit.bse,
+                'z_value': mM_logit.tvalues,
+                'p_value': mM_logit.pvalues,
+                'conf_Interval_Low': mM_logit.conf_int()[0],
+                'conf_Interval_High': mM_logit.conf_int()[1]
+            })
+
+  
 
     # "variable" and "regressors" are columnames of dataframe
     # you can add multiple regressors by making them interact: "+" for only fitting separately,
     # "*" for also fitting the interaction
     # Apply glm
-    mM_logit = smf.logit(
-        formula='choice_num ~ r_plus_1 + r_plus_2 + r_plus_3 + r_plus_4 + r_plus_5 + r_plus_6+ r_plus_7+ r_plus_8'
-                '+ r_plus_9 + r_plus_10 + r_plus_11 + r_plus_12 + r_plus_13 + r_plus_14 + r_plus_15 + r_plus_16'
-                '+ r_plus_17 + r_plus_18 + r_plus_19+ r_plus_20'
-                '+ r_minus_1 + r_minus_2 + r_minus_3 + r_minus_4 + r_minus_5 + r_minus_6+ r_minus_7+ r_minus_8'
-                '+ r_minus_9 + r_minus_10 + r_minus_11 + r_minus_12 + r_minus_13 + r_minus_14 + r_minus_15 '
-                '+ r_minus_16 + r_minus_17 + r_minus_18 + r_minus_19+ r_minus_20',
-        data=df_glm).fit()
-
+    mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df).fit()
+ 
     # prints the fitted GLM parameters (coefs), p-values and some other stuff
     results = mM_logit.summary()
     print(results)
