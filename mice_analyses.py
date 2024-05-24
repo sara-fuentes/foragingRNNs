@@ -12,6 +12,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
+import matplotlib.patches as mpatches
+
 
 def get_regressors(df, num_trial_back=10, iti=None):
     # latencies & times
@@ -124,6 +126,30 @@ def clean_iti_duration(value):
     except ValueError:
         # Handle the case where conversion fails
         return None
+    
+def plot_GLM(ax, GLM_df, alpha=1):
+    orders = np.arange(len(GLM_df))
+
+    # filter the DataFrame to separate the coefficients
+    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
+    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+    # intercept = GLM_df.loc['Intercept', "coefficient"]
+    ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
+    ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
+
+    # Create custom legend handles with labels and corresponding colors
+    legend_handles = [
+        mpatches.Patch(color='indianred', label='r+'),
+        mpatches.Patch(color='teal', label='r-')
+    ]
+
+    # Add legend with custom handles
+    ax.legend(handles=legend_handles)
+    # ax.axhline(y=intercept, label='Intercept', color='black')
+    ax.axhline(y=0, color='gray', linestyle='--')
+
+    ax.set_ylabel('GLM weight')
+    ax.set_xlabel('Previous trials')
 
 
 if __name__ == '__main__':
@@ -150,7 +176,9 @@ if __name__ == '__main__':
     # get only trials with iti
     df = df[df['task'] != 'S4'] # quita las sessiones sin ITI
     df = df[df['subject'] != 'manual'] #
-    for mice in df.subject.unique():
+    mice_counter = 0
+    f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
+    for mice in df['subject'].unique():
         print(mice)
         df_mice = df.loc[df['subject'] == mice]
         # get 3 equipopulated bins of iti values
@@ -167,8 +195,13 @@ if __name__ == '__main__':
                 'conf_Interval_Low': mM_logit.conf_int()[0],
                 'conf_Interval_High': mM_logit.conf_int()[1]
             })
-
-  
+            # alpha = 1 if iti_index == 0 else subtract 0.3 for each iti_index
+            alpha = 1 - 0.3 * iti_index
+            # subplot title with name of mouse
+            axes[mice_counter].set_title(mice)
+            plot_GLM(axes[mice_counter], GLM_df, alpha=alpha)
+        mice_counter += 1
+    plt.show()
 
     # "variable" and "regressors" are columnames of dataframe
     # you can add multiple regressors by making them interact: "+" for only fitting separately,
@@ -177,35 +210,34 @@ if __name__ == '__main__':
     # mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=GLM_df).fit()
  
     # prints the fitted GLM parameters (coefs), p-values and some other stuff
-    results = mM_logit.summary()
-    print(results)
-    # save param in df
-    m = pd.DataFrame({
-        'coefficient': mM_logit.params,
-        'std_err': mM_logit.bse,
-        'z_value': mM_logit.tvalues,
-        'p_value': mM_logit.pvalues,
-        'conf_Interval_Low': mM_logit.conf_int()[0],
-        'conf_Interval_High': mM_logit.conf_int()[1]
-    })
+    # results = mM_logit.summary()
+    # print(results)
+    # # save param in df
+    # m = pd.DataFrame({
+    #     'coefficient': mM_logit.params,
+    #     'std_err': mM_logit.bse,
+    #     'z_value': mM_logit.tvalues,
+    #     'p_value': mM_logit.pvalues,
+    #     'conf_Interval_Low': mM_logit.conf_int()[0],
+    #     'conf_Interval_High': mM_logit.conf_int()[1]
+    # })
 
-    axes = plt.subplot2grid((50, 50), (39, 0), rowspan=11, colspan=32)
-    orders = np.arange(len(m))
+    # axes = plt.subplot2grid((50, 50), (39, 0), rowspan=11, colspan=32)
+    # orders = np.arange(len(m))
 
-    # filter the DataFrame to separately the coefficients
-    r_plus = m.loc[m.index.str.contains('r_plus'), "coefficient"]
-    r_minus = m.loc[m.index.str.contains('r_minus'), "coefficient"]
-    intercept = m.loc['Intercept', "coefficient"]
+    # # filter the DataFrame to separately the coefficients
+    # r_plus = m.loc[m.index.str.contains('r_plus'), "coefficient"]
+    # r_minus = m.loc[m.index.str.contains('r_minus'), "coefficient"]
+    # intercept = m.loc['Intercept', "coefficient"]
 
-    plt.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
-    plt.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
-    plt.axhline(y=intercept, label='Intercept', color='black')
+    # plt.plot(orders[:len(r_plus)], r_plus, label='r+', marker='o', color='indianred')
+    # plt.plot(orders[:len(r_minus)], r_minus, label='r-', marker='o', color='teal')
+    # plt.axhline(y=intercept, label='Intercept', color='black')
 
 
     # axes.set_ylabel('GLM weight', label_kwargs)
     # axes.set_xlabel('Prevous trials', label_kwargs)
-    plt.legend()
-    plt.show()
+    # plt.legend()
 
 
     #### last PLOT : CUMULATIVE TRIAL RATE
