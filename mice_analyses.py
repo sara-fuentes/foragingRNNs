@@ -153,7 +153,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
 
 
 if __name__ == '__main__':
-    num_bins_iti = 3
+    num_bins_iti = 4
     # TODO:
     # 1. Move part of code to get_regressors
     # 1.1. Generalize code for mice using the code for RNNs
@@ -170,6 +170,8 @@ if __name__ == '__main__':
     #                      low_memory=False)
     # except Exception as e:
     #     print(f"An error occurred: {e}")
+    iti_bins = [0, 2, 6, 12, 20]
+
 
 # Read the CSV file and specify that a column (e.g., 'column_name') should be read as a float
     df = pd.read_csv(str(data_folder) + str(filename), sep=';', low_memory=False, dtype={'iti_duration': float})
@@ -182,9 +184,9 @@ if __name__ == '__main__':
         print(mice)
         df_mice = df.loc[df['subject'] == mice]
         # get 3 equipopulated bins of iti values
-        df_mice['iti_bins'], bins_iti = pd.qcut(df_mice['iti_duration'], num_bins_iti, labels=False, retbins=True)
+        df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
         for iti_index in range(num_bins_iti):
-            iti = [bins_iti[iti_index], bins_iti[iti_index + 1]]
+            iti = [iti_bins[iti_index], iti_bins[iti_index + 1]]
             df_glm_mice, regressors = get_regressors(df=df_mice, iti=iti)
             mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df_glm_mice).fit()
             GLM_df = pd.DataFrame({
