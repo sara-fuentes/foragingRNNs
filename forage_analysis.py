@@ -130,8 +130,8 @@ def plot_GLM(ax, GLM_df, alpha=1):
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
     # intercept = GLM_df.loc['Intercept', "coefficient"]
-    ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
-    ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
+    ax.plot(orders[:len(r_plus)], r_plus, marker='.', color='indianred', alpha=alpha)
+    ax.plot(orders[:len(r_minus)], r_minus, marker='.', color='teal', alpha=alpha)
 
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
@@ -206,6 +206,8 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
     # net_seeds = net_seeds[4:]
     num_networks = len(net_seeds)
     for i_net, ns in enumerate(net_seeds):
+        # if ns != 31076:
+        #     continue
         print(f'Analyzing net {i_net+1}/{num_networks} with seed {ns}')
         # build file name envS_XX_netS_XX
         save_folder_net = load_folder+'/envS_'+env_seed+'_netS_'+str(ns)
@@ -273,6 +275,7 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
                                        iti_mat < iti_bins[iti+1])
                 mean_performance.append(np.mean(perf[i_iti]))
                 # filter df by iti
+                df = ft.dict2df(data)
                 GLM_df = GLM(df.loc[i_iti])
                 if GLM_df is not None:
                     GLM_df['iti'] = (iti_bins[iti]+iti_bins[iti+1])/2
@@ -352,7 +355,11 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
         GLM_df = GLM_coeffs_all_itis.loc[i]
         if any(GLM_df['coefficient'] > 50):
             continue
-        plot_GLM(ax=ax1, GLM_df=GLM_df, alpha=0.5)
+        plot_GLM(ax=ax1, GLM_df=GLM_df, alpha=0.1)
+    mean_df = GLM_coeffs_all_itis.groupby(GLM_coeffs_all_itis.index).mean()
+    sem_df = GLM_coeffs_all_itis.groupby(GLM_coeffs_all_itis.index).sem()
+    plot_GLM_means(ax=ax1, GLM_df=mean_df, sem_df=sem_df)
+
     ax1.axhline(y=0, color='gray', linestyle='--')
     ax1.set_ylabel('GLM weight')
     ax1.set_xlabel('Previous trials')
@@ -362,27 +369,33 @@ def plot_general_analysis(mean_perf_smooth_list, GLM_coeffs, mean_perf,
     plt.close(fig1)
 
     # Plot GLM means for different ITIs
+    
     filtered_GLM_coeffs = GLM_coeffs[GLM_coeffs['iti'] != -1]
     grouped_iti = filtered_GLM_coeffs.groupby('iti')
+    counter = 0
     for iti, group_df in grouped_iti:
         mean_df = group_df.groupby(group_df.index).mean()
         sem_df = group_df.groupby(group_df.index).sem()
         plot_GLM_means(ax=ax[3], GLM_df=mean_df, sem_df=sem_df, alpha=1 /iti)
+        counter += 1
     ax[3].legend(loc='best')
     # Save individual subplot
-    fig3 = plt.figure(figsize=(4, 3))
-    ax3 = fig3.add_subplot(111)
+    fig, ax_iti = plt.subplots(nrows=1, ncols=3, figsize=(8, 3), sharey=True)
     iti_counter = 0
     for iti, group_df in grouped_iti:
+        for s in seeds:
+            i = group_df['seed'] == s
+            df_seed = group_df.loc[i]
+            if any(df_seed['coefficient'] > 50):
+                continue
+            plot_GLM(ax=ax_iti[iti_counter], GLM_df=df_seed, alpha=0.2)
         mean_df = group_df.groupby(group_df.index).mean()
         sem_df = group_df.groupby(group_df.index).sem()
-        alpha =  1 - 0.3 * iti_counter
-        plot_GLM_means(ax=ax3, GLM_df=mean_df, sem_df=sem_df, alpha=alpha)
+        plot_GLM_means(ax=ax_iti[iti_counter], GLM_df=mean_df, sem_df=sem_df)
         iti_counter += 1
-    ax3.legend(loc='best')
-    fig3.savefig(sv_folder + '/GLM_means_ITI.png', dpi=dpi)
-    fig3.savefig(sv_folder + '/GLM_means_ITI.svg', dpi=dpi)
-    plt.close(fig3)
+    fig.savefig(sv_folder + '/GLM_means_ITI.png', dpi=dpi)
+    fig.savefig(sv_folder + '/GLM_means_ITI.svg', dpi=dpi)
+    plt.close(fig)
 
     # Plot normalized performance by ITI
     normalized_mean_perf_iti = [mp / mp[0] for mp in mean_perf_iti]
@@ -622,8 +635,8 @@ def plot_GLM_means(ax, GLM_df, sem_df, alpha=1):
     orders = np.arange(len(r_plus))
 
     # Plot the mean coefficients with error bars
-    ax.errorbar(orders, r_plus, yerr= r_plus_err, marker='o', color='indianred', alpha=alpha, label='r+')
-    ax.errorbar(orders, r_minus, yerr= r_minus_err, marker='o', color='teal', alpha=alpha, label='r-')
+    ax.errorbar(orders, r_plus, yerr= r_plus_err, marker='.', color='indianred', alpha=alpha, label='r+')
+    ax.errorbar(orders, r_minus, yerr= r_minus_err, marker='.', color='teal', alpha=alpha, label='r-')
 
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
@@ -665,8 +678,8 @@ if __name__ == '__main__':
     num_periods = 40
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    # main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
    # main_folder = '/home/manuel/foragingRNNs/files/'
     # Set up the task
     w_factor = 0.01
@@ -702,12 +715,12 @@ if __name__ == '__main__':
     folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_prb{probs[0]}")
     filename = main_folder+'/training_data_w1e-02.csv'
-    redo = True
+    redo = False
     # Check if analysis_results.pkl exists in the main folder
     if not os.path.exists(f'{folder}/analysis_results.pkl') or redo:
         seeds, mean_perf_list, mean_perf_smooth_list, \
                 iti_bins, mean_perf_iti, GLM_coeffs, net_nums = \
-        general_analysis(load_folder=folder, file=filename, env=env, take_best=True, num_steps_exp=50000,
+        general_analysis(load_folder=folder, file=filename, env=env, take_best=True, num_steps_exp=100000,
                         verbose=True)
         # TODO: move inside general_analysis
         save_general_analysis_results(sv_folder=folder, seeds=seeds, mean_perf_list=mean_perf_list,
