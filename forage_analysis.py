@@ -275,7 +275,6 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
                                        iti_mat < iti_bins[iti+1])
                 mean_performance.append(np.mean(perf[i_iti]))
                 # filter df by iti
-                df = ft.dict2df(data)
                 GLM_df = GLM(df.loc[i_iti])
                 if GLM_df is not None:
                     GLM_df['iti'] = (iti_bins[iti]+iti_bins[iti+1])/2
@@ -292,6 +291,7 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
             mean_perf_iti.append(mean_performance)
                       
             if verbose:
+                raster_plot(df)
                 ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=300,
                              save_folder=save_folder_net)
 
@@ -667,6 +667,39 @@ def load_analysis_results(folder):
         data = pickle.load(f)
     return data['seeds'], data['mean_perf_list'], data['mean_perf_smooth_list'], data['iti_bins'], data['mean_perf_iti'], data['GLM_coeffs'], data['net_nums']
 
+def raster_plot(df):
+
+    # Compute probabilities
+    df['time'] = range(len(df))
+
+    # Probability of action = 3
+    prob_action_3 = df['actions'].rolling(window=5).apply(lambda x: np.mean(x == 3), raw=True)
+
+    # Probability of prob_r
+    prob_reward_3 = df['prob_r']
+
+    # Plotting
+    fig, ax1 = plt.subplots(figsize=(14, 7))
+
+    ax1.plot(df['time'], prob_action_3, 'g-', label='Probability of Right')
+    ax1.plot(df['time'], prob_reward_3, 'k-', label='Blocks')
+
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Probability of Right')  # , color='g')
+
+    ax1.legend(loc='upper left')
+
+    # Plotting choices (actions = 2, 3) as ticks
+    for i, row in df.iterrows():
+        if row['actions'] in [2, 3]:
+            if row['actions'] == row['gt']:
+                ax1.plot(row['time'], row['actions']-2, 'kx', markersize=10)
+            else:
+                ax1.plot(row['time'], row['actions']-2+(-1)**(row['actions']==2)*0.2, 'kx', markersize=5)
+
+    plt.title('Probability of Action 3 and Reward Probability over Time')
+    plt.show()
+
 # --- MAIN
 if __name__ == '__main__':
 # define parameters configuration
@@ -715,7 +748,7 @@ if __name__ == '__main__':
     folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_prb{probs[0]}")
     filename = main_folder+'/training_data_w1e-02.csv'
-    redo = False
+    redo = True
     # Check if analysis_results.pkl exists in the main folder
     if not os.path.exists(f'{folder}/analysis_results.pkl') or redo:
         seeds, mean_perf_list, mean_perf_smooth_list, \
