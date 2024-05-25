@@ -155,9 +155,10 @@ if __name__ == '__main__':
     # 1.1. Generalize code for mice using the code for RNNs
     # 2. Compute GLM conditioning on mouse (there are 3 mice in the dataset)
     # 3. Introduce ITI as a regressor
-    data_folder = 'C:\\Users\\saraf\\OneDrive\\Documentos\\IDIBAPS\\foraging RNNs\\mice\\'
-    # data_folder= '/home/molano/Dropbox/Molabo/foragingRNNs/mice/'
-    filename ='global_trials_sara.csv'
+    # data_folder = 'C:\\Users\\saraf\\OneDrive\\Documentos\\IDIBAPS\\foraging RNNs\\mice\\'
+    # filename ='global_trials_sara.csv'
+    data_folder= '/home/molano/Dropbox/Molabo/foragingRNNs/mice/'
+    filename ='global_trials.csv'
     # Read the CSV file and apply the custom converter function to the iti_duration column
     # try:
     #     df = pd.read_csv(str(data_folder) + str(filename), 
@@ -171,6 +172,8 @@ if __name__ == '__main__':
 
 # Read the CSV file and specify that a column (e.g., 'column_name') should be read as a float
     df = pd.read_csv(str(data_folder) + str(filename), sep=';', low_memory=False, dtype={'iti_duration': float})
+    # shift iti_duration to the next trial
+    df['iti_duration'] = df['iti_duration'].shift(-1)
     # get only trials with iti
     df = df[df['task'] != 'S4'] # quita las sessiones sin ITI
     df = df[df['subject'] != 'manual'] #
@@ -181,12 +184,12 @@ if __name__ == '__main__':
         df_mice = df.loc[df['subject'] == mice]
         # get 3 equipopulated bins of iti values
         df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
+        df_glm_mice, regressors = get_regressors(df=df_mice)
         for iti_index in range(num_bins_iti):
             iti = [iti_bins[iti_index], iti_bins[iti_index + 1]]
-            df_glm_mice, regressors = get_regressors(df=df_mice)
-            # TODO: filter by iti
-            df_glm_mice = df_glm_mice.loc[df_glm_mice['iti_bins'] == pd.Interval(left=iti[0], right=iti[1])]
-            mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df_glm_mice).fit()
+            # get all trials within the iti bin
+            df_glm_mice_iti = df_glm_mice[df_glm_mice['iti_duration'].between(iti[0], iti[1])]
+            mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df_glm_mice_iti).fit()
             GLM_df = pd.DataFrame({
                 'coefficient': mM_logit.params,
                 'std_err': mM_logit.bse,
