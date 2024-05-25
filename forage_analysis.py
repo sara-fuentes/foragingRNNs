@@ -57,7 +57,7 @@ class Net(nn.Module):
         return x, out
 
 
-def GLM(df):
+def GLM_regressors(df):
     # Prepare df columns
     # Converting the 'outcome' column to boolean values
     select_columns = ['reward', 'actions', 'iti']
@@ -96,31 +96,8 @@ def GLM(df):
         df_glm[f'r_minus_{i}'] = df_glm['r_minus'].shift(i)
         regr_plus += f'r_plus_{i} + '
         regr_minus += f'r_minus_{i} + '
-    regr_minus = regr_minus[:-3]
-    try:
-        # "variable" and "regressors" are columnames of dataframe
-        # Apply glm
-        # introduce an interaction between iti and regressors
-        mM_logit = smf.logit(formula='actions ~ ' + regr_plus + regr_minus,
-                            data=df_glm).fit()
-
-        # prints the fitted GLM parameters (coefs), p-values and some other stuff
-        # results = mM_logit.summary()
-        # print(results)
-        # save param in df
-        GLM_df = pd.DataFrame({
-            'coefficient': mM_logit.params,
-            'std_err': mM_logit.bse,
-            'z_value': mM_logit.tvalues,
-            'p_value': mM_logit.pvalues,
-            'conf_Interval_Low': mM_logit.conf_int()[0],
-            'conf_Interval_High': mM_logit.conf_int()[1]
-        })
-
-        return GLM_df
-    except Exception as e:
-        print(e)
-        return None
+    regressors = regr_plus + regr_minus[:-3]
+    return df_glm, regressors
 
 
 def plot_GLM(ax, GLM_df, alpha=1):
@@ -245,8 +222,22 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
 
         if mean_perf > PERF_THRESHOLD:
             df = ft.dict2df(data)
-            GLM_df = GLM(df)
-            if GLM_df is not None:
+            df_glm, regressors = GLM_regressors(df)
+            try:
+                # "variable" and "regressors" are columnames of dataframe
+                # Apply glm
+                mM_logit = smf.logit(formula='actions ~ ' + regressors,
+                                    data=df_glm).fit()
+                # save param in df
+                GLM_df = pd.DataFrame({
+                    'coefficient': mM_logit.params,
+                    'std_err': mM_logit.bse,
+                    'z_value': mM_logit.tvalues,
+                    'p_value': mM_logit.pvalues,
+                    'conf_Interval_Low': mM_logit.conf_int()[0],
+                    'conf_Interval_High': mM_logit.conf_int()[1]
+                })
+
                 GLM_df['iti'] = -1
                 # add column with network number
                 GLM_df['seed'] = ns
@@ -256,13 +247,14 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
                     plot_GLM(ax=ax_ind, GLM_df=GLM_df)
                     f.savefig(save_folder_net + '/GLM_weights.png')
                     plt.close(f)
+            except Exception as e:
+                print(e)
 
             iti_mat = np.array(data['iti'])
             iti_list = np.unique(iti_mat)
             # create bins for iti: 1-2, 3-4, 5-7
             iti_bins = np.array([1, 3, 5, 7])
             # check that no iti is smaller than 1 and larger than 7
-            # TODO: check ITIs
             assert np.all(iti_list >= 1) and np.all(iti_list <= 7)
             
             mean_performance = []
@@ -274,17 +266,31 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
                 i_iti = np.logical_and(iti_mat >= iti_bins[iti],
                                        iti_mat < iti_bins[iti+1])
                 mean_performance.append(np.mean(perf[i_iti]))
-                # filter df by iti
-                GLM_df = GLM(df.loc[i_iti])
-                if GLM_df is not None:
+                # get df for iti
+                df_glm_iti = df_glm.loc[i_iti]
+                try:
+                    # "variable" and "regressors" are columnames of dataframe
+                    # Apply glm
+                    mM_logit = smf.logit(formula='actions ~ ' + regressors,
+                                        data=df_glm_iti).fit()
+                    # save param in df
+                    GLM_df = pd.DataFrame({
+                        'coefficient': mM_logit.params,
+                        'std_err': mM_logit.bse,
+                        'z_value': mM_logit.tvalues,
+                        'p_value': mM_logit.pvalues,
+                        'conf_Interval_Low': mM_logit.conf_int()[0],
+                        'conf_Interval_High': mM_logit.conf_int()[1]
+                    })
                     GLM_df['iti'] = (iti_bins[iti]+iti_bins[iti+1])/2
                     # add column with network number
                     GLM_df['seed'] = ns
                     GLM_coeffs = pd.concat([GLM_coeffs, GLM_df], axis=0)
                     if verbose:
                         plot_GLM(ax=ax_ind, GLM_df=GLM_df, alpha=1/iti_bins[iti])
+                except Exception as e:
+                    print(e)
             if verbose:
-                # TODO: check that this figure makes sense (it is saved in each network folder)
                 f.savefig(save_folder_net + '/GLM_weights_itis.png')
                 plt.close(f)
             # TODO: check plot for this figure

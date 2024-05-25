@@ -15,7 +15,7 @@ import os
 import matplotlib.patches as mpatches
 
 
-def get_regressors(df, num_trial_back=10, iti=None):
+def get_regressors(df, num_trial_back=10):
     # latencies & times
     df['day'] = pd.to_datetime(df['date']).dt.date
   # Prepare df columns
@@ -23,10 +23,6 @@ def get_regressors(df, num_trial_back=10, iti=None):
     # print columns
     print(df.columns)
     df_glm = df.loc[:, select_columns].copy()
-    if iti is not None:
-        indx_iti = (df_glm['iti_duration'] >= iti[0]) & (df_glm['iti_duration'] <= iti[1])
-        # get all trials between iti[0] and iti[1]
-        df_glm = df_glm.loc[indx_iti]
 
     df_glm['outcome_bool'] = np.where(df_glm['outcome'] == "correct", 1, 0)
 
@@ -187,7 +183,9 @@ if __name__ == '__main__':
         df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
         for iti_index in range(num_bins_iti):
             iti = [iti_bins[iti_index], iti_bins[iti_index + 1]]
-            df_glm_mice, regressors = get_regressors(df=df_mice, iti=iti)
+            df_glm_mice, regressors = get_regressors(df=df_mice)
+            # TODO: filter by iti
+            df_glm_mice = df_glm_mice.loc[df_glm_mice['iti_bins'] == pd.Interval(left=iti[0], right=iti[1])]
             mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df_glm_mice).fit()
             GLM_df = pd.DataFrame({
                 'coefficient': mM_logit.params,
