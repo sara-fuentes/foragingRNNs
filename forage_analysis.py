@@ -169,8 +169,8 @@ def plot_hist_mean_perf(ax, perfs):
     ax.set_ylabel('Frequency')
 
 
-def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
-                     verbose=False, env_seed='123'):
+def general_analysis(load_folder, file, env, take_best, num_steps_exp=200000,
+                     verbose=False, env_seed='123', plot_raster=False):
     # train several networks with different seeds
     net_nums = []
     mean_perf_list = []
@@ -296,7 +296,7 @@ def general_analysis(load_folder, file, env, take_best, num_steps_exp=50000,
             # TODO: check plot for this figure
             mean_perf_iti.append(mean_performance)
                       
-            if verbose:
+            if plot_raster:
                 raster_plot(df)
                 ft.plot_task(env_kwargs=ENV_KWARGS, data=data, num_steps=300,
                              save_folder=save_folder_net)
@@ -717,8 +717,8 @@ if __name__ == '__main__':
     num_periods = 40
     TRAINING_KWARGS['num_periods'] = num_periods
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    # main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
    # main_folder = '/home/manuel/foragingRNNs/files/'
     # Set up the task
     w_factor = 0.01
@@ -754,7 +754,7 @@ if __name__ == '__main__':
     folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_prb{probs[0]}")
     filename = main_folder+'/training_data_w1e-02.csv'
-    redo = True
+    redo = False
     # Check if analysis_results.pkl exists in the main folder
     if not os.path.exists(f'{folder}/analysis_results.pkl') or redo:
         seeds, mean_perf_list, mean_perf_smooth_list, \
