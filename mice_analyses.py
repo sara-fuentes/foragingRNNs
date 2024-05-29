@@ -146,7 +146,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
 
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
-
+    
 
 if __name__ == '__main__':
     num_bins_iti = 4
@@ -155,9 +155,9 @@ if __name__ == '__main__':
     # 1.1. Generalize code for mice using the code for RNNs
     # 2. Compute GLM conditioning on mouse (there are 3 mice in the dataset)
     # 3. Introduce ITI as a regressor
-    # data_folder = 'C:\\Users\\saraf\\OneDrive\\Documentos\\IDIBAPS\\foraging RNNs\\mice\\'
+    data_folder = 'C:\\Users\\saraf\\OneDrive\\Documentos\\IDIBAPS\\foraging RNNs\\mice\\'
     # filename ='global_trials_sara.csv'
-    data_folder= '/home/molano/Dropbox/Molabo/foragingRNNs/mice/'
+    # data_folder= '/home/molano/Dropbox/Molabo/foragingRNNs/mice/'
     filename ='global_trials.csv'
     # Read the CSV file and apply the custom converter function to the iti_duration column
     # try:
@@ -173,7 +173,7 @@ if __name__ == '__main__':
 # Read the CSV file and specify that a column (e.g., 'column_name') should be read as a float
     df = pd.read_csv(str(data_folder) + str(filename), sep=';', low_memory=False, dtype={'iti_duration': float})
     # shift iti_duration to the next trial
-    df['iti_duration'] = df['iti_duration'].shift(-1)
+    df['iti_duration'] = df['iti_duration'].shift(1)
     # get only trials with iti
     df = df[df['task'] != 'S4'] # quita las sessiones sin ITI
     df = df[df['subject'] != 'manual'] #
@@ -205,6 +205,13 @@ if __name__ == '__main__':
             plot_GLM(axes[mice_counter], GLM_df, alpha=alpha)
         mice_counter += 1
     plt.show()
+ 
+    f.savefig(data_folder + 'GLM_mice_iti.png')
+    f.savefig(data_folder + 'GLM_mice_iti.svg')
+
+    # plot GLM means for the three mice
+
+
 
     # "variable" and "regressors" are columnames of dataframe
     # you can add multiple regressors by making them interact: "+" for only fitting separately,
