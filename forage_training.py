@@ -6,10 +6,11 @@ Created on Thu Feb  8 22:20:23 2024
 
 import torch.nn as nn
 import torch
-import ngym_foraging as ngym_f
-from ngym_foraging.wrappers import pass_reward, pass_action
+import gymnasium as gym
+import neurogym as ngym
+from neurogym.wrappers import pass_reward, pass_action, side_bias
 import forage_analysis as fa
-import gym
+
 import matplotlib.pyplot as plt
 from scipy.special import erf
 import pandas as pd
@@ -23,7 +24,8 @@ from tkinter import simpledialog
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-TASK = 'ForagingBlocks-v0'
+TASK = 'Foraging-v0'
+# TASK = 'PerceptualDecisionMaking-v0'
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
                    'n_epochs': 100,
@@ -36,9 +38,8 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
     """
     Create an environment with the specified parameters.
     """
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
-                  'blk_dur': blk_dur, 'timing':
-                    {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'timing':
+                    {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),
                         # mean, min, max
                         'fixation': fix_dur, 'decision': dec_dur},
                     # Decision period}
@@ -47,6 +48,7 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
     env = gym.make(TASK, **env_kwargs)
     env = pass_reward.PassReward(env)
     env = pass_action.PassAction(env)
+    env = side_bias.SideBias(env, probs=probs, block_dur=blk_dur)
     # set seed
     env.seed(env_seed)
     env.reset()
@@ -188,7 +190,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
     prob_l = []
     rew = 0
     action = 0
-    ob, _, _, _ = env.step(action)
+    ob, _, _, _, _ = env.step(action)
     inputs = [ob]
     if net is not None:
         hidden = torch.zeros(1, 1, net.hidden_size)
@@ -204,7 +206,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             action_probs = torch.nn.functional.softmax(action_probs, dim=2)
             action = torch.argmax(action_probs[0, 0]).item()
 
-        ob, rew, done, info = env.step(action)
+        ob, rew, _, _, info = env.step(action)
 
         inputs.append(ob)
         actions.append(action)
@@ -325,7 +327,37 @@ def dict2df(data):
 def train_network(num_periods, criterion, env, net_kwargs, env_kwargs,
                   seq_len, debug=False, seed=0, save_folder=None, num_trials_perf=100):
     """
+    Train a recurrent neural network (RNN) in a specified environment.
+
+    Parameters
+    ----------
+    num_periods : int
+        Number of training periods.
+    criterion : torch.nn.Module
+        Loss function to optimize.
+    env : gym.Env
+        Environment in which the agent will be trained.
+    net_kwargs : dict
+        Dictionary containing network parameters including input_size, hidden_size, and output_size.
+    env_kwargs : dict
+        Dictionary containing environment parameters.
+    seq_len : int
+        Sequence length for training.
+    debug : bool, optional
+        If True, enables debug mode with additional plots (default is False).
+    seed : int, optional
+        Random seed for reproducibility (default is 0).
+    save_folder : str, optional
+        Folder to save the trained network and training data (default is None).
+    num_trials_perf : int, optional
+        Number of trials to compute performance (default is 100).
+
+    Returns
+    -------
+    dict
+        A dictionary containing the training performance metrics including mean performance, mean reward, loss, and error metrics.
     """
+    # create network    
     net = Net(input_size=net_kwargs['input_size'],
               hidden_size=net_kwargs['hidden_size'],
               output_size=env.action_space.n, seed=seed)
@@ -368,7 +400,7 @@ def train_network(num_periods, criterion, env, net_kwargs, env_kwargs,
 
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
-                      num_steps=seq_len)
+                      num_steps=seq_len, save_folder=save_folder)
         # transform data to a pandas dataframe.
         df = dict2df(data)
         mean_perf_list.append(data['mean_perf'])
@@ -679,7 +711,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
                                    save_folder=save_folder_net)
         # save data as npz
         np.savez(save_folder_net + '/data.npz', **data_behav)
-        if debug:
+        if 1:  # debug
             # get data from data_behav
             mean_perf_list = data_behav['mean_perf_list']
             mean_rew_list = data_behav['mean_rew_list']
@@ -702,7 +734,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
 
         # Move network to the device (CPU or GPU)
         net = net.to(DEVICE)
-        net = torch.load(save_folder_net+'/net.pth')
+        net = torch.load(save_folder_net+'/net.pth', weights_only=False)
 
         with torch.no_grad():
             data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
@@ -731,16 +763,16 @@ if __name__ == '__main__':
     num_steps_test = 10000
     num_networks = 30
     # create folder to save data based on env seed
-    main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/molano/Dropbox/Molabo/foragingRNNs/' # '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
+    main_folder = '/home/manuel.molano/foragingRNNs/files/' # '/home/molano/foragingRNNs_data/nets/'
 
     # Create the main Tkinter window
     root = tk.Tk()
     root.withdraw()  # Hide the main window
     # Prompt the user for input using a pop-up dialog
-    experiment_type = simpledialog.askstring("Experiment Type", "Are you running a normal experiment (press Enter) or a test ('test')?")
+    # experiment_type = simpledialog.askstring("Experiment Type", "Are you running a normal experiment (press Enter) or a test ('test')?")
     # Determine the variable based on user input
-    test_flag = experiment_type
+    test_flag = '' # experiment_type
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
     w_factor = 0.01 # 0.00001
@@ -748,17 +780,18 @@ if __name__ == '__main__':
     max_ITI = 800
     fix_dur = 100
     dec_dur = 100
-    probs = np.array([0.2, 0.8])
+    probs = np.array([[0.2, 0.8], [0.8, 0.2]])
     # create folder to save data based on parameters
     save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_"f"prb{probs[0]}")
-
+    # remove braquets from save_folder
+    save_folder = save_folder.replace('[', '').replace(']', '')
 
     train = True
     # define parameter to explore
-    lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2])
-    blk_dur_mat = np.array([25]) # np.array([25, 50, 100])
-    seq_len_mat = np.array([100]) # np.array([50, 300, 500])
+    lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
+    blk_dur_mat = np.array([25]) # np.array([25, 50, 100]) Block duration
+    seq_len_mat = np.array([100]) # np.array([50, 300, 500]) Sequence length ()
     total_num_timesteps = 1200000 # 600000
 
     if train:
@@ -769,7 +802,7 @@ if __name__ == '__main__':
                                         blk_dur=bd, probs=probs)
             net_kwargs = {'hidden_size': 128,
                         'action_size': env.action_space.n,
-                        'input_size': env.observation_space.shape[0]}
+                        'input_size': env.observation_space.n}
 
             for seq_len in seq_len_mat:
                 num_periods = total_num_timesteps // seq_len
@@ -778,7 +811,7 @@ if __name__ == '__main__':
                                                 num_networks=num_networks, env=env, w_factor=w_factor,
                                                 env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
                                                 filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-                                                num_periods=num_periods, seq_len=seq_len, lr=lr)
+                                                num_periods=num_periods, seq_len=seq_len, lr=lr, debug=False)
 
     filename ='training_data_bias_corrected_th04.csv'
 
@@ -793,67 +826,3 @@ if __name__ == '__main__':
                                        filename=filename)
 
 
-# --- MAIN
-# if __name__ == '__main__':
-#     plt.close('all')
-#     env_seed = 123
-#     num_periods = 40
-#     TRAINING_KWARGS['num_periods'] = num_periods
-#     # create folder to save data based on env seed
-#     main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-#    # main_folder = '/home/molano/foragingRNNs_data/nets/'
-#     # Set up the task
-#     w_factor = 0.00001
-#     mean_ITI = 200
-#     max_ITI = 400
-#     fix_dur = 100
-#     dec_dur = 100
-#     blk_dur = 50
-#     probs = np.array([0.1, 0.9])
-#     env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
-#                   'blk_dur': blk_dur, 'timing':
-#                       {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
-#                        # mean, min, max
-#                        'fixation': fix_dur, 'decision': dec_dur},
-#                       # Decision period}
-#                       'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
-#     TRAINING_KWARGS['classes_weights'] =\
-#         torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
-#                       w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
-#     # call function to sample
-#     env = gym.make(TASK, **env_kwargs)
-#     env = pass_reward.PassReward(env)
-#     env = pass_action.PassAction(env)
-#     # set seed
-#     env.seed(env_seed)
-#     env.reset()
-#     net_kwargs = {'hidden_size': 128,
-#                   'action_size': env.action_space.n,
-#                   'input_size': env.observation_space.shape[0]}
-#     TRAINING_KWARGS['env_kwargs'] = env_kwargs
-#     TRAINING_KWARGS['net_kwargs'] = net_kwargs
-#     # plot task
-#     data = run_agent_in_environment(num_steps_exp=100, env=env)
-#     plot_task(env_kwargs=env_kwargs, data=data, num_steps=100)
-
-#     # create folder to save data based on parameters
-#     save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-#                    f"d{dec_dur}_nb{np.round(blk_dur/1e3, 1)}_"
-#                    f"prb{probs[0]}")
-
-#     # create folder to save data based on env seed
-#     os.makedirs(save_folder + 'n_pers_'+str(np.round(num_periods/1e3, 1))+'k_'+'s_'+str(env_seed),
-#                 exist_ok=True)
-
-#     # Save config as npz
-#     np.savez(save_folder+'/config.npz', **TRAINING_KWARGS)
-#     # Save config
-#     # with open(save_folder+'/config.json', 'w') as f:
-#     #     json.dump(TRAINING_KWARGS, f)
-#     num_epochs = TRAINING_KWARGS['n_epochs']
-#     num_steps_plot = 100
-#     num_steps_test = 1000
-#     debug = False
-#     num_networks = 1
-#     criterion = nn.CrossEntropyLoss(weight=TRAINING_KWARGS['classes_weights'])
-#     # train several networks with different seeds

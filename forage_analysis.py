@@ -5,9 +5,9 @@ Created on Thu Feb  8 22:20:23 2024
 """
 import torch.nn as nn
 import torch
-import ngym_foraging as ngym_f
-from ngym_foraging.wrappers import pass_reward, pass_action
-import gym
+import neurogym as ngym
+from neurogym.wrappers import pass_reward, pass_action, side_bias
+import gymnasium as gym
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -25,7 +25,7 @@ import pickle
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-TASK = 'ForagingBlocks-v0'
+TASK = 'PerceptualDecisionMaking-v0'
 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
@@ -728,9 +728,8 @@ if __name__ == '__main__':
     dec_dur = 100
     blk_dur = 25
     probs = np.array([0.2, 0.8])
-    ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
-                'blk_dur': blk_dur, 'timing':
-                    {'ITI': ngym_f.random.TruncExp(mean_ITI, 100, max_ITI),
+    ENV_KWARGS = {'dt': TRAINING_KWARGS['dt'], 'timing':
+                    {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),
                         # mean, min, max
                         'fixation': fix_dur, 'decision': dec_dur},
                     # Decision period}
