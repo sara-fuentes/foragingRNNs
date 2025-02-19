@@ -25,7 +25,7 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
 TASK = 'Foraging-v0'
-TASK = 'ForagingBlocks-v0'
+# TASK = 'ForagingBlocks-v0'
 # TASK = 'PerceptualDecisionMaking-v0'
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
@@ -435,16 +435,14 @@ def train_network(num_periods, criterion, env, net_kwargs, env_kwargs,
         temp_mean_perf.append(data['mean_perf'])
         if len(temp_mean_perf) > num_eps_perf:
             temp_mean_perf.pop(0)
-        # TODO: use loss to check performance?
         if i_per % log_per == log_per-1 and np.mean(temp_mean_perf) >= maximum_perf:
             # open and write to file
             # print temp_mean_perf rounding to 2 decimals and transforming to normal numbers (not )
-            temp_mean_perf_round = [float(round(x, 2)) for x in temp_mean_perf]
-            print('Mean performance:', temp_mean_perf_round)
             with open(save_folder + '/training_data.txt', 'a') as f:
                 f.write('------------\n')
                 f.write('Period: ' + str(i_per) + ' of ' + str(num_periods) + '\n')
-                f.write('Mean performance: ' + str(data['mean_perf']) + '\n')
+                f.write('Mean performance period: ' + str(data['mean_perf']) + '\n')
+                f.write('Mean performance: ' + str(round(np.mean(temp_mean_perf), 2)) + '\n')
                 f.write('Mean reward: ' + str(data['mean_rew']) + '\n')
                 f.write('Loss: ' + str(loss_step) + '\n')
             # save net
@@ -705,7 +703,7 @@ def train_multiple_networks(mean_ITI, max_ITI, fix_dur, blk_dur, w_factor,
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     mperf_list = []
     for _ in range(num_networks):
-        seed = 14710  # np.random.randint(0, 1000000)
+        seed = np.random.randint(0, 1000000)
         # create folder to save data based on net seed and env seed
         save_folder_net = save_folder + '/envS_' + str(env_seed) + '_netS_' + str(seed)
         # create folder to save data based on net seed
@@ -780,7 +778,7 @@ if __name__ == '__main__':
     env_seed = 123
     num_steps_plot = 200
     num_steps_test = 10000
-    num_networks = 1 # 30
+    num_networks = 10
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/manuel.molano/foragingRNNs/files/' # '/home/molano/foragingRNNs_data/nets/'
@@ -818,7 +816,7 @@ if __name__ == '__main__':
     save_folder = save_folder.replace(' ', '')
     save_folder = save_folder.replace('-v0', '')
     # define parameter to explore
-    lr_mat = np.array([0.001]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
+    lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
     blk_dur_mat = np.array([25]) # np.array([25, 50, 100]) Block duration
     seq_len_mat = np.array([100]) # np.array([50, 300, 500]) Sequence length ()
     total_num_timesteps = 1200000 # 
