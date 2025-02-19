@@ -16,8 +16,9 @@ from scipy.special import erf
 import pandas as pd
 import numpy as np
 import os
+import glob
 import tkinter as tk
-from tkinter import simpledialog
+# from tkinter import simpledialog
 
 
 # check if GPU is available
@@ -728,8 +729,8 @@ def train_multiple_networks(mean_ITI, max_ITI, fix_dur, blk_dur, w_factor,
                                    debug=debug, seed=seed,
                                    save_folder=save_folder_net)
         # save data as npz
-        np.savez(save_folder_net + '/data.npz', **data_behav)
-        if 1:  # debug
+        np.savez(save_folder_net + '/training_data.npz', **data_behav)
+        if debug:
             # get data from data_behav
             mean_perf_list = data_behav['mean_perf_list']
             mean_rew_list = data_behav['mean_rew_list']
@@ -756,21 +757,22 @@ def train_multiple_networks(mean_ITI, max_ITI, fix_dur, blk_dur, w_factor,
         with torch.no_grad():
             data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
                                             net=net)
+            np.savez(save_folder_net + '/test_data.npz', **data)
             mperf_list.append(data['mean_perf'])
             plot_task(env_kwargs=env_kwargs, data=data, num_steps=num_steps_plot,
                     save_folder=save_folder_net)
             plot_performace_by_iti(data, save_folder=save_folder_net)
             plt.close('all')
-            df = dict2df(data)
+            # df = dict2df(data)
 
-            # save the data fom the net in the dataframe
-            training_df = process_dataframe(main_folder=main_folder, num_periods=num_periods,
-                                            filename=filename, df=df,
-                                            save_folder=save_folder, lr=lr,
-                                            env_seed=env_seed, seed=seed,
-                                            mean_ITI=mean_ITI, fix_dur=fix_dur,
-                                            blk_dur=blk_dur, seq_len=seq_len)
-    return mperf_list, training_df
+            # # save the data fom the net in the dataframe
+            # training_df = process_dataframe(main_folder=main_folder, num_periods=num_periods,
+            #                                 filename=filename, df=df,
+            #                                 save_folder=save_folder, lr=lr,
+            #                                 env_seed=env_seed, seed=seed,
+            #                                 mean_ITI=mean_ITI, fix_dur=fix_dur,
+            #                                 blk_dur=blk_dur, seq_len=seq_len)
+    return mperf_list, None
 
 
 if __name__ == '__main__':
@@ -808,7 +810,8 @@ if __name__ == '__main__':
     max_ITI = 800
     fix_dur = 100
     dec_dur = 100
-    probs = np.array([[0.2, 0.8], [0.8, 0.2]])
+    prob = 0.8
+    probs = np.array([[1-prob, prob], [prob, 1-prob]])
     # create folder to save data based on parameters
     save_folder = (f"{main_folder}{TASK}_w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_"f"prb{probs[0]}")   
@@ -821,12 +824,27 @@ if __name__ == '__main__':
     seq_len_mat = np.array([100]) # np.array([50, 300, 500]) Sequence length ()
     total_num_timesteps = 1200000 # 
     train = True
+    debug = False
     if train:
         for bd in blk_dur_mat:
             # create the environment with the parameters
             env_kwargs, env = create_env(env_seed=env_seed, mean_ITI=mean_ITI, max_ITI=max_ITI,
                                         fix_dur=fix_dur, dec_dur=dec_dur,
                                         blk_dur=bd, probs=probs)
+            if debug:
+                data = run_agent_in_environment(num_steps_exp=10000, env=env)
+                gt = np.array(data['gt'])
+                perf = np.array(data['perf'])
+                gt = gt[perf!=-1]
+                prob = np.array(data['prob_l'])
+                plt.figure()
+                plt.plot(gt, color='k')
+                plt.plot(prob+2, color='r')
+                # check mean gt when prob is 0.8
+                choice_l = gt == 3
+                mean_gt = np.mean(choice_l[prob==0.8])
+                print(mean_gt)
+                plt.show()
             net_kwargs = {'hidden_size': 128,
                         'action_size': env.action_space.n,
                         'input_size': env.observation_space.n}
@@ -838,9 +856,44 @@ if __name__ == '__main__':
                                                 num_networks=num_networks, env=env, w_factor=w_factor,
                                                 env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
                                                 filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-                                                num_periods=num_periods, seq_len=seq_len, lr=lr, debug=False,
+                                                num_periods=num_periods, seq_len=seq_len, lr=lr, debug=debug,
                                                 num_steps_test=num_steps_test, num_steps_plot=num_steps_plot)
 
+    # find all experiments in the folder
+    exp_folders = glob.glob(save_folder + '/env*')
+    # create list to store training data
+    training_data = []
+    test_data = [] 
+    # for each exp folder find data.npz
+    for exp_folder in exp_folders:
+        try:
+            data = np.load(exp_folder + '/training_data.npz')
+        except FileNotFoundError:
+            data = np.load(exp_folder + '/data.npz')
+        # get mean performance
+        mean_perf = data['mean_perf_list']
+        # smooth mean performance
+        mean_perf = np.convolve(mean_perf, np.ones(100)/100, mode='valid')
+        training_data.append(mean_perf)
+        try:
+            # get testing performance
+            data = np.load(exp_folder + '/test_data.npz')
+            # get mean performance
+            test_data.append(data['mean_perf'])
+        except FileNotFoundError:
+            continue
+     # create figure to plot performance across training
+    f, ax = plt.subplots(figsize=(7, 3), nrows=1, ncols=2, dpi=150)
+    ax[0].plot(np.array(training_data).T, color='gray', alpha=0.5)
+    ax[0].plot(np.mean(training_data, axis=0), color='k', linewidth=2)
+    ax[0].set_xlabel('Period')
+    ax[0].set_ylabel('Mean performance')
+    ax[1].hist(test_data)
+    ax[1].set_xlabel('Mean performance')
+    ax[1].set_ylabel('Frequency')
+    plt.tight_layout()
+    plt.show()
+    plt.savefig(save_folder + '/mean_perf.png')
     # filename ='training_data_bias_corrected_th04.csv'
 
     # # boxplots for each parameter configuration
