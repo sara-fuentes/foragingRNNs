@@ -25,11 +25,10 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
 TASK = 'Foraging-v0'
+TASK = 'ForagingBlocks-v0'
 # TASK = 'PerceptualDecisionMaking-v0'
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
-                   'n_epochs': 100,
-                   'batch_size': 16,
                    'seq_len': 300,
                    'TASK': TASK}
 
@@ -38,17 +37,31 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
     """
     Create an environment with the specified parameters.
     """
-    env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'timing':
-                    {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),
-                        # mean, min, max
-                        'fixation': fix_dur, 'decision': dec_dur},
-                    # Decision period}
-                    'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
-    # call function to sample
-    env = gym.make(TASK, **env_kwargs)
-    env = pass_reward.PassReward(env)
-    env = pass_action.PassAction(env)
-    env = side_bias.SideBias(env, probs=probs, block_dur=blk_dur)
+    if TASK == 'Foraging-v0':
+        env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'timing':
+                        {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),
+                            # mean, min, max
+                            'fixation': fix_dur, 'decision': dec_dur},
+                        # Decision period}
+                        'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+        # call function to sample
+        env = gym.make(TASK, **env_kwargs)
+        env = pass_reward.PassReward(env)
+        env = pass_action.PassAction(env)
+        env = side_bias.SideBias(env, probs=probs, block_dur=blk_dur)
+    elif TASK == 'ForagingBlocks-v0':
+        env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs[0],
+                        'blk_dur': blk_dur, 'timing':
+                            {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),        
+                             # mean, min, max
+                            'fixation': fix_dur, 'decision': dec_dur},
+                        # Decision period}
+                        'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+        # call function to sample
+        env = gym.make(TASK, **env_kwargs)
+        env = pass_reward.PassReward(env)
+        env = pass_action.PassAction(env)
+
     # set seed
     env.seed(env_seed)
     env.reset()
@@ -388,6 +401,8 @@ def train_network(num_periods, criterion, env, net_kwargs, env_kwargs,
     maximum_perf = 0
     # open txt file to save data
     for i_per in range(num_periods):
+        if i_per % 100 == 0:
+            print('Period:', i_per, 'of', num_periods)
         data = run_agent_in_environment(env=env, net=net,
                                         num_steps_exp=seq_len)
         # transform list of torch to torch tensor
@@ -420,8 +435,12 @@ def train_network(num_periods, criterion, env, net_kwargs, env_kwargs,
         temp_mean_perf.append(data['mean_perf'])
         if len(temp_mean_perf) > num_eps_perf:
             temp_mean_perf.pop(0)
+        # TODO: use loss to check performance?
         if i_per % log_per == log_per-1 and np.mean(temp_mean_perf) >= maximum_perf:
             # open and write to file
+            # print temp_mean_perf rounding to 2 decimals and transforming to normal numbers (not )
+            temp_mean_perf_round = [float(round(x, 2)) for x in temp_mean_perf]
+            print('Mean performance:', temp_mean_perf_round)
             with open(save_folder + '/training_data.txt', 'a') as f:
                 f.write('------------\n')
                 f.write('Period: ' + str(i_per) + ' of ' + str(num_periods) + '\n')
@@ -672,7 +691,7 @@ def process_dataframe(main_folder, filename, df, save_folder, env_seed, seed,
     return training_df
 
 
-def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
+def train_multiple_networks(mean_ITI, max_ITI, fix_dur, blk_dur, w_factor,
                             num_networks, env, env_seed, main_folder,
                             save_folder, filename, env_kwargs, net_kwargs,
                             num_periods, seq_len, debug=False, num_steps_test=1000,
@@ -686,7 +705,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     mperf_list = []
     for _ in range(num_networks):
-        seed = np.random.randint(0, 1000000)
+        seed = 14710  # np.random.randint(0, 1000000)
         # create folder to save data based on net seed and env seed
         save_folder_net = save_folder + '/envS_' + str(env_seed) + '_netS_' + str(seed)
         # create folder to save data based on net seed
@@ -696,6 +715,7 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
             f.write('env_seed: ' + str(env_seed) + '\n')
             f.write('net_seed: ' + str(seed) + '\n')
             f.write('mean_ITI: ' + str(mean_ITI) + '\n')
+            f.write('max_ITI: ' + str(max_ITI) + '\n')
             f.write('fix_dur: ' + str(fix_dur) + '\n')
             f.write('blk_dur: ' + str(blk_dur) + '\n')
             f.write('seq_len: ' + str(seq_len) + '\n')
@@ -733,9 +753,8 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
                 output_size=env.action_space.n, seed=seed)
 
         # Move network to the device (CPU or GPU)
-        net = net.to(DEVICE)
-        net = torch.load(save_folder_net+'/net.pth', weights_only=False)
-
+        net = torch.load(save_folder_net+'/net.pth', map_location=DEVICE, weights_only=False)
+        net = net.to(DEVICE)  # Move it explicitly
         with torch.no_grad():
             data = run_agent_in_environment(num_steps_exp=num_steps_test, env=env,
                                             net=net)
@@ -759,9 +778,9 @@ def train_multiple_networks(mean_ITI, fix_dur, blk_dur, w_factor,
 if __name__ == '__main__':
     # define parameters configuration
     env_seed = 123
-    num_steps_plot = 100
+    num_steps_plot = 200
     num_steps_test = 10000
-    num_networks = 30
+    num_networks = 1 # 30
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
     main_folder = '/home/manuel.molano/foragingRNNs/files/' # '/home/molano/foragingRNNs_data/nets/'
@@ -775,25 +794,35 @@ if __name__ == '__main__':
     test_flag = '' # experiment_type
     filename = 'training_data'+test_flag+'.csv'
     # Set up the task
-    w_factor = 0.01 # 0.00001
+    # THIS WORKS:
+    # env_seed: 123
+    # net_seed: 14710
+    # mean_ITI: 400
+    # fix_dur: 100
+    # blk_dur: 25
+    # seq_len: 100
+    # num_periods: 12000
+    # lr: 0.001
+    # w_factor: 0.01
+
+    w_factor = 0.01
     mean_ITI = 400
     max_ITI = 800
     fix_dur = 100
     dec_dur = 100
     probs = np.array([[0.2, 0.8], [0.8, 0.2]])
     # create folder to save data based on parameters
-    save_folder = (f"{main_folder}w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
-                    f"d{dec_dur}_"f"prb{probs[0]}")
-    # remove braquets from save_folder
+    save_folder = (f"{main_folder}{TASK}_w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+                    f"d{dec_dur}_"f"prb{probs[0]}")   
     save_folder = save_folder.replace('[', '').replace(']', '')
-
-    train = True
+    save_folder = save_folder.replace(' ', '')
+    save_folder = save_folder.replace('-v0', '')
     # define parameter to explore
-    lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
+    lr_mat = np.array([0.001]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
     blk_dur_mat = np.array([25]) # np.array([25, 50, 100]) Block duration
     seq_len_mat = np.array([100]) # np.array([50, 300, 500]) Sequence length ()
-    total_num_timesteps = 1200000 # 600000
-
+    total_num_timesteps = 1200000 # 
+    train = True
     if train:
         for bd in blk_dur_mat:
             # create the environment with the parameters
@@ -807,22 +836,24 @@ if __name__ == '__main__':
             for seq_len in seq_len_mat:
                 num_periods = total_num_timesteps // seq_len
                 for lr in lr_mat:
-                    _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur, blk_dur=bd,
+                    _, _ = train_multiple_networks(mean_ITI=mean_ITI, max_ITI=max_ITI, fix_dur=fix_dur, blk_dur=bd,
                                                 num_networks=num_networks, env=env, w_factor=w_factor,
                                                 env_seed=env_seed, main_folder=main_folder, save_folder=save_folder,
                                                 filename=filename, env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-                                                num_periods=num_periods, seq_len=seq_len, lr=lr, debug=False)
+                                                num_periods=num_periods, seq_len=seq_len, lr=lr, debug=False,
+                                                num_steps_test=num_steps_test, num_steps_plot=num_steps_plot)
 
-    filename ='training_data_bias_corrected_th04.csv'
+    # filename ='training_data_bias_corrected_th04.csv'
 
-    # boxplots for each parameter configuration
-    lr_mat =  np.array([1e-3, 1e-2,]) # np.array([1e-3, 1e-2, 3e-2])
-    seq_len_mat =  np.array([50, 300]) # np.array([50, 300, 500])
+    # # boxplots for each parameter configuration
+    # lr_mat =  np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2])
+    # seq_len_mat =  np.array([50]) # np.array([50, 300, 500])
+    # blk_dur_mat = np.array([25])
+    
+    # fa.get_mean_perf_by_param_comb(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
+    #                                filename=filename)
 
-    fa.get_mean_perf_by_param_comb(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
-                                   filename=filename)
-
-    fa.get_perf_by_param_comb_all_nets(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
-                                       filename=filename)
+    # fa.get_perf_by_param_comb_all_nets(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
+    #                                    filename=filename)
 
 
