@@ -25,8 +25,8 @@ import tkinter as tk
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-# TASK = 'Foraging-v0'
-TASK = 'ForagingBlocks-v0'
+TASK = 'Foraging-v0'
+# TASK = 'ForagingBlocks-v0'
 # TASK = 'PerceptualDecisionMaking-v0'
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
