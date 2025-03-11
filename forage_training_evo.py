@@ -9,7 +9,7 @@ import torch
 import gymnasium as gym
 import neurogym as ngym
 from neurogym.wrappers import pass_reward, pass_action, side_bias
-import forage_analysis as fa
+# import forage_analysis as fa
 import pickle
 import matplotlib.pyplot as plt
 from scipy.special import erf
@@ -827,9 +827,8 @@ if __name__ == '__main__':
     num_steps_test = 10000
     num_networks = 100
     # create folder to save data based on env seed
-    # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/manuel.molano/foragingRNNs/files/' # '/home/molano/foragingRNNs_data/nets/'
-
+    # main_folder = '/home/manuel.molano/foragingRNNs/files/'
+    main_folder = '/home/manuel/foragingRNNs/files/'
     # Create the main Tkinter window
     root = tk.Tk()
     root.withdraw()  # Hide the main window
@@ -863,6 +862,7 @@ if __name__ == '__main__':
     save_folder = save_folder.replace('[', '').replace(']', '')
     save_folder = save_folder.replace(' ', '')
     save_folder = save_folder.replace('-v0', '')
+    os.makedirs(save_folder, exist_ok=True)
     # define parameter to explore
     lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
     blk_dur_mat = np.array([25]) # np.array([25, 50, 100]) Block duration

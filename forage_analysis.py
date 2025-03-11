@@ -17,8 +17,8 @@ import forage_training as ft
 import statsmodels.formula.api as smf
 import pandas as pd
 import seaborn as sns
-import glob
-import itertools
+# import glob
+# import itertools
 import pickle
 
 # check if GPU is available
