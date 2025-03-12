@@ -34,7 +34,7 @@ TRAINING_KWARGS = {'dt': 100,
                    'TASK': TASK}
 
 def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
-               blk_dur, probs):
+               blk_dur, probs, num_choices=2, pass_info=False):
     """
     Create an environment with the specified parameters.
     """
@@ -43,13 +43,13 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
                         {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),
                             # mean, min, max
                             'fixation': fix_dur, 'decision': dec_dur},
-                        # Decision period}
-                        'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+                        'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.},
+                        'dim_ring': num_choices}
         # call function to sample
         env = gym.make(TASK, **env_kwargs)
-        env = pass_reward.PassReward(env)
-        env = pass_action.PassAction(env)
-        env = side_bias.SideBias(env, probs=probs, block_dur=blk_dur)
+        if pass_info:
+            env = pass_reward.PassReward(env)
+            env = pass_action.PassAction(env)
     elif TASK == 'ForagingBlocks-v0':
         env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs[0],
                         'blk_dur': blk_dur, 'timing':
@@ -73,70 +73,88 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
 import torch
 import torch.nn as nn
 
-class Net(nn.Module):
-    """
-    Recurrent neural network with random rewiring mutation.
-    Example usage
-    net = Net(input_size=10, hidden_size=20, output_size=5)
-
-    Use external seeds to track mutations
-    seeds = [42, 123, 456, 789, 1011]
-
-    for seed in seeds:
-        net.mutate(seed)
-
-    Retrieve mutation history
-    mutation_history = net.get_mutation_history()
-    print(mutation_history)
-    """
-    def __init__(self, input_size, hidden_size, output_size, mutation_rate=0.1, seed=0):
-        super(Net, self).__init__()
+class LowRankRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, rank=1, mutation_rate=0.1,
+                 duplication_rate=0.05, removal_rate=0.05, seed=0):
+        super(LowRankRNN, self).__init__()
 
         self.hidden_size = hidden_size
-        torch.manual_seed(seed)  # Set fixed seed for initial weights
-        self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu')
-        self.linear = nn.Linear(hidden_size, output_size)
+        self.rank = rank  # Initial rank
+        self.mutation_rate = mutation_rate  # Probability of mutating a weight
+        self.duplication_rate = duplication_rate  # Probability of duplicating a rank
+        self.removal_rate = removal_rate  # Probability of removing a rank
+        
+        torch.manual_seed(seed)  # Ensure deterministic initialization
 
-        self.mutation_rate = mutation_rate  # Fraction of weights to rewire
-        self.mutation_log = []  # Store mutation history
+        # Low-rank factors
+        self.U = nn.Parameter(torch.randn(hidden_size, rank) * 0.1)
+        self.V = nn.Parameter(torch.randn(hidden_size, rank) * 0.1)
+
+        # Define the RNN
+        self.vanilla = nn.RNN(input_size, hidden_size, nonlinearity='relu', bias=False)
+        self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x, hidden=None):
         if hidden is None:
-            hidden = torch.zeros(1, x.size(1), self.hidden_size)
+            hidden = torch.zeros(1, x.size(1), self.hidden_size, device=x.device)
+
+        # Dynamically compute W = UV^T (ensures backpropagation through U and V)
+        W = self.U @ self.V.T
+        self.vanilla.weight_hh_l0.data = W  # Update recurrent matrix
+
         out, _ = self.vanilla(x, hidden)
         x = self.linear(out)
         return x, out
 
     def mutate(self, seed):
-        """Apply random rewiring mutation with an external seed"""
-        torch.manual_seed(seed)  # Set external seed
+        """Apply synaptic and structural mutations"""
+        torch.manual_seed(seed)
+        with torch.no_grad():
+            # **1. Synaptic Mutations**
+            for param in [self.U, self.V]:
+                mask = torch.rand_like(param) < self.mutation_rate  # Select weights to mutate
+                std = param.std().item() + 1e-6  # Prevent zero std
+                mean = param.mean().item()
+
+                # Generate new values preserving the same distribution
+                new_values = torch.randn_like(param) * std + mean
+                param[mask] = new_values[mask]  # Mutate selected elements
+
+            # **2. Structural Mutations**
+            if torch.rand(1).item() < self.duplication_rate and self.rank < self.hidden_size:
+                self.duplicate_rank()
+            if torch.rand(1).item() < self.removal_rate and self.rank > 1:
+                self.remove_rank()
+
+        # print(f"Mutation with seed {seed}: Synaptic + Structural mutations applied.")
+
+    def duplicate_rank(self):
+        """Randomly duplicate an existing rank and slightly mutate it"""
+        with torch.no_grad():
+            idx = torch.randint(0, self.rank, (1,)).item()  # Pick a random rank to duplicate
+            new_u = self.U[:, idx] + torch.randn_like(self.U[:, idx]) * 0.01  # Slightly modify
+            new_v = self.V[:, idx] + torch.randn_like(self.V[:, idx]) * 0.01  # Slightly modify
+
+            # Expand U and V
+            self.U = nn.Parameter(torch.cat([self.U, new_u.unsqueeze(1)], dim=1))
+            self.V = nn.Parameter(torch.cat([self.V, new_v.unsqueeze(1)], dim=1))
+
+            self.rank += 1  # Update rank count
+            # print(f"Duplicated rank {idx}, new rank: {self.rank}")
+
+    def remove_rank(self):
+        """Randomly remove an existing rank"""
+        if self.rank <= 1:
+            return  # Ensure we don't remove the last rank
 
         with torch.no_grad():
-            weight_hh = self.vanilla.weight_hh_l0  # Recurrent weight matrix
-            mask = torch.rand_like(weight_hh) < self.mutation_rate  # Select weights to mutate
-            
-            # Ensure std is not zero
-            std = weight_hh.std().item() + 1e-6
-            mean = weight_hh.mean().item()
+            idx = torch.randint(0, self.rank, (1,)).item()  # Pick a random rank to remove
+            self.U = nn.Parameter(torch.cat([self.U[:, :idx], self.U[:, idx+1:]], dim=1))
+            self.V = nn.Parameter(torch.cat([self.V[:, :idx], self.V[:, idx+1:]], dim=1))
 
-            # Sample new weights from the same distribution
-            new_weights = torch.randn_like(weight_hh) * std + mean  
+            self.rank -= 1  # Update rank count
+            # print(f"Removed rank {idx}, new rank: {self.rank}")
 
-            # Fully replace the selected weights
-            weight_hh[mask] = new_weights[mask]
-            # Log mutations
-            mutated_indices = mask.nonzero(as_tuple=True)
-            self.mutation_log.append({
-                "seed": seed,
-                "mutated_indices": mutated_indices,
-                "new_weights": new_weights[mutated_indices].tolist()
-            })
-
-        # print(f"Random rewiring with seed {seed}: {mask.sum().item()} connections changed.")
-
-    def get_mutation_history(self):
-        """Return the recorded mutation history"""
-        return self.mutation_log
 
 
 def analysis_activity_by_condition(activity, info, config,
@@ -259,7 +277,7 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             action = env.action_space.sample()
         else:
             ob_tensor = torch.tensor([ob], dtype=torch.float32)
-            ob_tensor = ob_tensor.unsqueeze(0)
+            ob_tensor = ob_tensor.unsqueeze(0).unsqueeze(0)
             action_probs, hidden = net(x=ob_tensor, hidden=hidden)
             act_pr_mat.append(action_probs)
             # Assuming `net` returns action probabilities
@@ -385,7 +403,7 @@ def dict2df(data):
 
 
 def train_network(num_periods, criterion, env, net, env_kwargs, survival_threshold,
-                  seq_len, debug=False, num_trials_perf=100, log_per=20):
+                  seq_len, costs, debug=False, num_trials_perf=100, log_per=20):
     """
     Train a recurrent neural network (RNN) in a specified environment.
 
@@ -446,7 +464,6 @@ def train_network(num_periods, criterion, env, net, env_kwargs, survival_thresho
         if debug:
             plot_task(env_kwargs=env_kwargs, data=data,
                       num_steps=seq_len, save_folder=save_folder)
-        mean_rew_list.append(data['mean_rew'])
         # we need to zero the parameter gradients to re-initialize and
         # avoid they accumulate across epochs
         optimizer.zero_grad()
@@ -456,8 +473,11 @@ def train_network(num_periods, criterion, env, net, env_kwargs, survival_thresho
         loss.backward()
         # update weights
         optimizer.step()
+        # compute cost
+        total_reward = np.sum(data['rew_mat'] - costs[data['actions']])
+        mean_rew_list.append(total_reward)
         # compute performance for the last num_eps_perf episodes
-        temp_mean_rew.append(data['mean_rew'])
+        temp_mean_rew.append(total_reward)
         if len(temp_mean_rew) > num_eps_perf:
             temp_mean_rew.pop(0)
         if i_per % log_per == log_per-1 and np.mean(temp_mean_rew) < survival_threshold:
@@ -736,10 +756,9 @@ def assign_offspring(performance_scores):
     return offspring_counts
 
 
-
-def train_multiple_networks(mean_ITI, fix_dur, w_factor,
-                            num_networks, env, env_seed, save_folder, env_kwargs, net_kwargs,
-                            num_periods, seq_len, debug=False, lr=None):
+def evolve_networks(mean_ITI, fix_dur, w_factor, num_networks, env, env_seed, save_folder,
+                    env_kwargs, net_kwargs, num_periods, num_generations, seq_len, costs,
+                    survival_threshold=0.05, debug=False, lr=None):
     with open(save_folder + '/evo_history.txt', 'w') as f:
         f.write('env_seed: ' + str(env_seed) + '\n')
     if lr is not None:
@@ -747,11 +766,9 @@ def train_multiple_networks(mean_ITI, fix_dur, w_factor,
     # set weights for the loss function
     class_weights =\
     torch.tensor([w_factor*TRAINING_KWARGS['dt']/(mean_ITI),
-                    w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2])
+                    w_factor*TRAINING_KWARGS['dt']/fix_dur, 2, 2, 2])
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     mperf_list = []
-    num_generations = 1000
-    survival_threshold = 0.05
     seeds = [[i] for i in np.random.randint(0, 10000, size=num_networks)]
     kids_list = [2]*num_networks
     for gen in range(num_generations):
@@ -770,15 +787,8 @@ def train_multiple_networks(mean_ITI, fix_dur, w_factor,
                     seed_children = seed
                 # convert list to string
                 seed_str = '.'.join(map(str, seed_children))
-                # create folder to save data based on net seed and env seed
-                # save_folder_net = save_folder + '/envS_' + str(env_seed) 
-                # + '_netS_' + str(seed_str) + '_gen_' + str(gen)
-                # create folder to save data based on net seed
-                # os.makedirs(save_folder_net, exist_ok=True)
-                # save all params in a txt file
-            
                 # create network    
-                net = Net(input_size=net_kwargs['input_size'],
+                net = LowRankRNN(input_size=net_kwargs['input_size'],
                         hidden_size=net_kwargs['hidden_size'],
                         output_size=env.action_space.n, seed=seed_children[0])
                 
@@ -793,14 +803,12 @@ def train_multiple_networks(mean_ITI, fix_dur, w_factor,
                                                 env=env, net=net,
                                                 survival_threshold=survival_threshold,
                                                 env_kwargs=env_kwargs,
-                                                seq_len=seq_len,
+                                                seq_len=seq_len, costs=costs,
                                                 debug=debug)
                 perf_list.append(mean_reward)
                 survival_list.append(alive)
                 with open(save_folder + '/evo_history.txt', 'a') as f:
                     f.write('strain: ' + str(seed_str) + ' perf: ' + str(mean_reward) + ' alive: ' + str(alive) + '\n')
-        # print mean performance 
-        print('Generation: ', gen, ' Mean performance: ', np.mean(perf_list))
         # save performance list and new seeds
         data = {'perf_list': np.array(perf_list), 'new_seeds': new_seeds}  # Keep new_seeds as list
         with open(save_folder + '/evo_history_gen_' + str(gen) + '.pkl', 'wb') as f:
@@ -815,49 +823,45 @@ def train_multiple_networks(mean_ITI, fix_dur, w_factor,
         seeds = seeds[:num_networks]
         perf_list = perf_list[:num_networks]
         kids_list = assign_offspring(perf_list)
-        survival_threshold = np.median(perf_list)
+        # set survival threshold as the 10 percentile of the performance list
+        survival_threshold = np.percentile(perf_list, 25)
+        # print mean performance 
+        print('Generation: ', gen, ' Mean performance: ', np.mean(perf_list))
+        # print percentage of alive networks 
+        print('Percentage of alive networks: ', np.sum(survival_list)/num_networks)
+        print('New survival threshold: ', survival_threshold)
 
     return mperf_list, None
 
 
 if __name__ == '__main__':
+    # create folder to save data based on env seed
+    main_folder = '/home/manuel.molano/foragingRNNs/files/'
+    # main_folder = '/home/manuel/foragingRNNs/files/'
+    filename = 'training_data.csv'
     # define parameters configuration
     env_seed = 1234
     num_steps_plot = 200
     num_steps_test = 10000
     num_networks = 100
-    # create folder to save data based on env seed
-    # main_folder = '/home/manuel.molano/foragingRNNs/files/'
-    main_folder = '/home/manuel/foragingRNNs/files/'
-    # Create the main Tkinter window
-    root = tk.Tk()
-    root.withdraw()  # Hide the main window
-    # Prompt the user for input using a pop-up dialog
-    # experiment_type = simpledialog.askstring("Experiment Type", "Are you running a normal experiment (press Enter) or a test ('test')?")
-    # Determine the variable based on user input
-    test_flag = '' # experiment_type
-    filename = 'training_data'+test_flag+'.csv'
+    num_choices = 3
+    survival_threshold = -10
     # Set up the task
-    # THIS WORKS:
-    # env_seed: 123
-    # net_seed: 14710
-    # mean_ITI: 400
-    # fix_dur: 100
-    # blk_dur: 25
-    # seq_len: 100
-    # num_periods: 12000
-    # lr: 0.001
-    # w_factor: 0.01
-
     w_factor = 0.01
-    mean_ITI = 400
-    max_ITI = 800
+    mean_ITI = 200
+    max_ITI = 300
     fix_dur = 100
     dec_dur = 100
-    prob = 0.99
-    probs = np.array([[1-prob, prob], [prob, 1-prob]])
+    # probs for decision 1, 2 and decision 3
+    probs = np.array([[1, 0.75, 0.3]])
+    # costs for no-action, fixation, decision 1, 2 and decision 3
+    costs = np.array([0.1, 0.2, 0.5, 0.25, 0.2])
+    if num_choices == 2:
+        task = TASK
+    else:
+        task = 'MAB'
     # create folder to save data based on parameters
-    save_folder = (f"{main_folder}EVO_{TASK}_w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
+    save_folder = (f"{main_folder}EVO_{task}_w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_"f"prb{probs[0]}")   
     save_folder = save_folder.replace('[', '').replace(']', '')
     save_folder = save_folder.replace(' ', '')
@@ -867,14 +871,40 @@ if __name__ == '__main__':
     lr_mat = np.array([1e-3]) # np.array([1e-3, 1e-2, 3e-2]) Learning Rate
     blk_dur_mat = np.array([25]) # np.array([25, 50, 100]) Block duration
     seq_len_mat = np.array([100]) # np.array([50, 300, 500]) Sequence length ()
-    total_num_timesteps = 10000 # 
+    num_steps_inner_loop = 10000 # 
+    num_generations = 1000
+    # Save parameters to a txt file
+    file_path = os.path.join(save_folder, "parameters.txt")
+    with open(file_path, "w") as f:
+        f.write(f"env_seed = {env_seed}\n")
+        f.write(f"num_steps_plot = {num_steps_plot}\n")
+        f.write(f"num_steps_test = {num_steps_test}\n")
+        f.write(f"num_networks = {num_networks}\n")
+        f.write(f"num_choices = {num_choices}\n")
+        f.write(f"survival_threshold = {survival_threshold}\n")
+        f.write("# Set up the task\n")
+        f.write(f"w_factor = {w_factor}\n")
+        f.write(f"mean_ITI = {mean_ITI}\n")
+        f.write(f"max_ITI = {max_ITI}\n")
+        f.write(f"fix_dur = {fix_dur}\n")
+        f.write(f"dec_dur = {dec_dur}\n")
+        f.write("# probs for decision 1, 2 and decision 3\n")
+        f.write(f"probs = {probs.tolist()}\n")
+        f.write("# costs for no-action, fixation, decision 1, 2 and decision 3\n")
+        f.write(f"costs = {costs.tolist()}\n")
+        f.write("# define parameter to explore\n")
+        f.write(f"lr_mat = {lr_mat.tolist()}\n")
+        f.write(f"blk_dur_mat = {blk_dur_mat.tolist()}\n")
+        f.write(f"seq_len_mat = {seq_len_mat.tolist()}\n")
+        f.write(f"num_steps_inner_loop = {num_steps_inner_loop}\n")
+        f.write(f"num_generations = {num_generations}\n")
     train = True
     debug = False
     if train:
         for bd in blk_dur_mat:
             # create the environment with the parameters
             env_kwargs, env = create_env(env_seed=env_seed, mean_ITI=mean_ITI, max_ITI=max_ITI,
-                                        fix_dur=fix_dur, dec_dur=dec_dur,
+                                        fix_dur=fix_dur, dec_dur=dec_dur, num_choices=num_choices,
                                         blk_dur=bd, probs=probs)
             if debug:
                 data = run_agent_in_environment(num_steps_exp=10000, env=env)
@@ -894,13 +924,15 @@ if __name__ == '__main__':
                         'action_size': env.action_space.n,
                         'input_size': env.observation_space.n}
             for seq_len in seq_len_mat:
-                num_periods = total_num_timesteps // seq_len
+                num_periods = num_steps_inner_loop // seq_len
                 for lr in lr_mat:
-                    _, _ = train_multiple_networks(mean_ITI=mean_ITI, fix_dur=fix_dur,
+                    _, _ = evolve_networks(mean_ITI=mean_ITI, fix_dur=fix_dur,
                                                 num_networks=num_networks, env=env, w_factor=w_factor,
                                                 env_seed=env_seed, save_folder=save_folder,
                                                 env_kwargs=env_kwargs, net_kwargs=net_kwargs,
-                                                num_periods=num_periods, seq_len=seq_len, lr=lr, debug=debug)
+                                                num_periods=num_periods, num_generations=num_generations,
+                                                seq_len=seq_len, costs=costs, survival_threshold=survival_threshold,
+                                                lr=lr, debug=debug)
 
     # find all experiments in the folder
     exp_folders = glob.glob(save_folder + '/env*')
