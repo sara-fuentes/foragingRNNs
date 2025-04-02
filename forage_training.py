@@ -1,9 +1,3 @@
-"""
-Created on Thu Feb  8 22:20:23 2024
-
-@author: saraf
-"""
-
 import torch.nn as nn
 import torch
 import gymnasium as gym
@@ -25,20 +19,20 @@ import tkinter as tk
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # name of the task on the neurogym library
-TASK = 'Foraging-v0'
-# TASK = 'ForagingBlocks-v0' 
-# TASK = 'PerceptualDecisionMaking-v0'
+#TASK = 'Foraging-v0'
+TASK = 'ForagingBlocks-v0'
+# TASK = 'PerceptualDecisionMaking-v0' 
 TRAINING_KWARGS = {'dt': 100,
                    'lr': 1e-2,
                    'seq_len': 300,
                    'TASK': TASK}
 
 def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
-               blk_dur, probs):
+               blk_dur, probs,task,variable_blk_dur):
     """
     Create an environment with the specified parameters.
     """
-    if TASK == 'Foraging-v0':
+    if task == 'Foraging-v0':
         env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'timing':
                         {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),
                             # mean, min, max
@@ -46,12 +40,26 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
                         # Decision period}
                         'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
         # call function to sample
-        env = gym.make(TASK, **env_kwargs)
+        env = gym.make(task, **env_kwargs)
         env = pass_reward.PassReward(env)
         env = pass_action.PassAction(env)
         env = side_bias.SideBias(env, probs=probs, block_dur=blk_dur)
-    elif TASK == 'ForagingBlocks-v0':
-        env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs[0],
+    elif task == 'ForagingBlocks-v0':
+        # we have changed 'probs' = probs[0] for 'probs' = probs to enable Cate's task, it should work correctly
+        env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
+                        'blk_dur': blk_dur, 'variable_blk_dur' : variable_blk_dur, 'timing':
+                            {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),        
+                             # mean, min, max
+                            'fixation': fix_dur, 'decision': dec_dur},
+                        # Decision period}
+                        'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
+        # call function to sample
+        env = gym.make(task, **env_kwargs)
+        env = pass_reward.PassReward(env)
+        env = pass_action.PassAction(env)
+    elif task == 'NewForagingBlocks-v0':
+        # we have changed 'probs' = probs[0] for 'probs' = probs to enable Cate's task, it should work correctly
+        env_kwargs = {'dt': TRAINING_KWARGS['dt'], 'probs': probs,
                         'blk_dur': blk_dur, 'timing':
                             {'ITI': ngym.ngym_random.TruncExp(mean_ITI, 100, max_ITI),        
                              # mean, min, max
@@ -59,7 +67,7 @@ def create_env(env_seed, mean_ITI, max_ITI, fix_dur, dec_dur,
                         # Decision period}
                         'rewards': {'abort': 0., 'fixation': 0., 'correct': 1.}}
         # call function to sample
-        env = gym.make(TASK, **env_kwargs)
+        env = gym.make(task, **env_kwargs)
         env = pass_reward.PassReward(env)
         env = pass_action.PassAction(env)
 
@@ -172,7 +180,7 @@ def equalize_arrays(array_list):
 
     return padded_arrays
 
-
+#the net was set nto None here
 def run_agent_in_environment(num_steps_exp, env, net=None):
     """
     Run the agent in the environment for a specified number of steps.
@@ -218,6 +226,8 @@ def run_agent_in_environment(num_steps_exp, env, net=None):
             act_pr_mat.append(action_probs)
             # Assuming `net` returns action probabilities
             action_probs = torch.nn.functional.softmax(action_probs, dim=2)
+            # Maybe not get always the one with the mex probability but get them with the probabilities each actions actually have
+            # action = torch.multinomial(action_probs[0, 0], 1).item() (suggested by deepseek)
             action = torch.argmax(action_probs[0, 0]).item()
 
         ob, rew, _, _, info = env.step(action)
@@ -780,10 +790,12 @@ if __name__ == '__main__':
     env_seed = 123
     num_steps_plot = 200
     num_steps_test = 10000
-    num_networks = 10
+    num_networks = 1
     # create folder to save data based on env seed
     # main_folder = 'C:/Users/saraf/OneDrive/Documentos/IDIBAPS/foraging RNNs/nets/'
-    main_folder = '/home/manuel.molano/foragingRNNs/files/' # '/home/molano/foragingRNNs_data/nets/'
+    # main_folder = '/home/marcaf/TFM(IDIBAPS)/rrns2/networks/' # 
+    # main_folder = '/home/molano/foragingRNNs_data/nets/'
+    main_folder = '/home/manuel.molano/foragingRNNs/files/'
 
     # Create the main Tkinter window
     root = tk.Tk()
@@ -811,7 +823,10 @@ if __name__ == '__main__':
     fix_dur = 100
     dec_dur = 100
     prob = 0.8
-    probs = np.array([[1-prob, prob], [prob, 1-prob]])
+    #probs = np.array([[1-prob, prob], [prob, 1-prob]])
+    #Vertechi
+    probs = [np.array([0.3, 0.7]), np.array([0.7, 0.3])]
+
     # create folder to save data based on parameters
     save_folder = (f"{main_folder}{TASK}_w{w_factor}_mITI{mean_ITI}_xITI{max_ITI}_f{fix_dur}_"
                     f"d{dec_dur}_"f"prb{probs[0]}")   
@@ -830,7 +845,7 @@ if __name__ == '__main__':
             # create the environment with the parameters
             env_kwargs, env = create_env(env_seed=env_seed, mean_ITI=mean_ITI, max_ITI=max_ITI,
                                         fix_dur=fix_dur, dec_dur=dec_dur,
-                                        blk_dur=bd, probs=probs)
+                                        blk_dur=bd, probs=probs, task=TASK, variable_blk_dur=False)
             if debug:
                 data = run_agent_in_environment(num_steps_exp=10000, env=env)
                 gt = np.array(data['gt'])
@@ -906,5 +921,4 @@ if __name__ == '__main__':
 
     # fa.get_perf_by_param_comb_all_nets(lr_mat=lr_mat, blk_dur_mat=blk_dur_mat, seq_len_mat=seq_len_mat, main_folder=main_folder,
     #                                    filename=filename)
-
 
